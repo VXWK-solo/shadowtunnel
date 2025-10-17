@@ -1,0 +1,23 @@
+---
+- name: Update VPN Users
+  hosts: "{{ target_hosts | default('vpn_servers') }}"
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Regenerate user configurations
+      include_role:
+        name: client
+      delegate_to: localhost
+      become: false
+      tags: [update-users]
+    
+    - name: Restart VPN services
+      systemd:
+        name: "{{ item }}"
+        state: restarted
+      loop:
+        - xray
+        - v2ray
+      when: item in ansible_facts.services
+      tags: [update-users]

@@ -1,0 +1,53 @@
+---
+- name: Provision Cloud Server
+  hosts: localhost
+  become: false
+  gather_facts: false
+  
+  tasks:
+    - name: Prompt for cloud provider
+      pause:
+        prompt: |
+          Select cloud provider:
+          1) DigitalOcean
+          2) Amazon EC2
+          3) Google Cloud Platform
+          4) Microsoft Azure
+          5) Vultr
+          6) Linode
+          7) Hetzner Cloud
+          8) Scaleway
+          9) Existing Ubuntu server
+          
+          Enter choice (1-9):
+      register: provider_choice
+    
+    - name: Set cloud provider
+      set_fact:
+        cloud_provider: "{{ ['digitalocean', 'ec2', 'gce', 'azure', 'vultr', 'linode', 'hetzner', 'scaleway', 'local'][provider_choice.user_input | int - 1] }}"
+    
+    - name: Include cloud provisioning tasks
+      include_tasks: "cloud-{{ cloud_provider }}.yml"
+      when: cloud_provider != 'local'
+    
+    - name: Prompt for existing server details
+      pause:
+        prompt: |
+          Enter server details:
+          IP address:
+      register: server_ip
+      when: cloud_provider == 'local'
+    
+    - name: Set server IP for local deployment
+      set_fact:
+        server_ip: "{{ server_ip.user_input }}"
+      when: cloud_provider == 'local'
+    
+    - name: Add server to inventory
+      add_host:
+        name: "vpn_server"
+        groups: "vpn_servers"
+        ansible_host: "{{ server_ip }}"
+        ansible_user: "root"
+        ansible_ssh_private_key_file: "{{ ssh_key_file | default('~/.ssh/id_rsa') }}"
+      when: cloud_provider == 'local'

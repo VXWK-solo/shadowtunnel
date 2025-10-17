@@ -1,0 +1,109 @@
+---
+- name: Install Certbot
+  package:
+    name:
+      - certbot
+      - python3-certbot-nginx
+      - nginx
+    state: present
+
+- name: Create nginx configuration for ACME challenge
+  template:
+    src: nginx-acme.conf.j2
+    dest: /etc/nginx/sites-available/acme-challenge
+    mode: '0644'
+  notify: restart nginx
+
+- name: Enable ACME challenge site
+  file:
+    src: /etc/nginx/sites-available/acme-challenge
+    dest: /etc/nginx/sites-enabled/acme-challenge
+    state: link
+  notify: restart nginx
+
+- name: Remove default nginx site
+  file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  notify: restart nginx
+
+- name: Start and enable nginx
+  systemd:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: Obtain SSL certificate
+  command: >
+    certbot certonly
+    --webroot
+    --webroot-path=/var/www/acme-challenge
+    --email {{ tls.email | default('admin@example.com') }}
+    --agree-tos
+    --no-eff-email
+    --domains {{ tls.domain }}
+    --non-interactive
+  register: certbot_result
+  failed_when: certbot_result.rc != 0 and 'already exists' not in certbot_result.stderr
+
+- name: Create certificate renewal script
+  template:
+    src: renew-certs.sh.j2
+    dest: /usr/local/bin/renew-certs.sh
+    mode: '0755'
+
+- name: Create systemd timer for certificate renewal
+  template:
+    src: cert-renewal.timer.j2
+    dest: /etc/systemd/system/cert-renewal.timer
+    mode: '0644'
+
+- name: Create systemd service for certificate renewal
+  template:
+    src: cert-renewal.service.j2
+    dest: /etc/systemd/system/cert-renewal.service
+    mode: '0644'
+
+- name: Enable certificate renewal timer
+  systemd:
+    name: cert-renewal.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Copy certificates to xray directory
+  copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: "{{ xray_user | default('xray') }}"
+    group: "{{ xray_group | default('xray') }}"
+    mode: '0600'
+    remote_src: true
+  loop:
+    - { src: "/etc/letsencrypt/live/{{ tls.domain }}/fullchain.pem", dest: "/etc/xray/cert.pem" }
+    - { src: "/etc/letsencrypt/live/{{ tls.domain }}/privkey.pem", dest: "/etc/xray/key.pem" }
+
+- name: Create certificate monitoring script
+  template:
+    src: cert-monitor.sh.j2
+    dest: /usr/local/bin/cert-monitor.sh
+    mode: '0755'
+
+- name: Create certificate monitoring timer
+  template:
+    src: cert-monitor.timer.j2
+    dest: /etc/systemd/system/cert-monitor.timer
+    mode: '0644'
+
+- name: Create certificate monitoring service
+  template:
+    src: cert-monitor.service.j2
+    dest: /etc/systemd/system/cert-monitor.service
+    mode: '0644'
+
+- name: Enable certificate monitoring timer
+  systemd:
+    name: cert-monitor.timer
+    enabled: true
+    state: started
+    daemon_reload: true

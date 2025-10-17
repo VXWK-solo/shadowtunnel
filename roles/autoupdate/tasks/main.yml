@@ -1,0 +1,139 @@
+---
+- name: Install update tools
+  package:
+    name:
+      - unattended-upgrades
+      - apt-listchanges
+      - cron
+      - curl
+      - wget
+      - git
+    state: present
+
+- name: Configure automatic security updates
+  template:
+    src: 50unattended-upgrades.j2
+    dest: /etc/apt/apt.conf.d/50unattended-upgrades
+    mode: '0644'
+
+- name: Configure automatic updates
+  template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    mode: '0644'
+
+- name: Create update check script
+  template:
+    src: check-updates.sh.j2
+    dest: /usr/local/bin/check-updates.sh
+    mode: '0755'
+
+- name: Create update script
+  template:
+    src: update-system.sh.j2
+    dest: /usr/local/bin/update-system.sh
+    mode: '0755'
+
+- name: Create VPN software update script
+  template:
+    src: update-vpn.sh.j2
+    dest: /usr/local/bin/update-vpn.sh
+    mode: '0755'
+
+- name: Create update notification script
+  template:
+    src: update-notify.sh.j2
+    dest: /usr/local/bin/update-notify.sh
+    mode: '0755'
+
+- name: Create update systemd service
+  template:
+    src: update-check.service.j2
+    dest: /etc/systemd/system/update-check.service
+    mode: '0644'
+
+- name: Create update timer
+  template:
+    src: update-check.timer.j2
+    dest: /etc/systemd/system/update-check.timer
+    mode: '0644'
+
+- name: Enable update timer
+  systemd:
+    name: update-check.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create update log directory
+  file:
+    path: /var/log/updates
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create update configuration
+  template:
+    src: update.conf.j2
+    dest: /etc/advanced-vpn/update.conf
+    mode: '0644'
+
+- name: Create update rollback script
+  template:
+    src: rollback.sh.j2
+    dest: /usr/local/bin/rollback.sh
+    mode: '0755'
+
+- name: Create update test script
+  template:
+    src: test-update.sh.j2
+    dest: /usr/local/bin/test-update.sh
+    mode: '0755'
+
+- name: Create update staging script
+  template:
+    src: stage-update.sh.j2
+    dest: /usr/local/bin/stage-update.sh
+    mode: '0755'
+
+- name: Create update validation script
+  template:
+    src: validate-update.sh.j2
+    dest: /usr/local/bin/validate-update.sh
+    mode: '0755'
+
+- name: Create update cron jobs
+  cron:
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour }}"
+    job: "{{ item.job }}"
+  loop:
+    - { name: "Daily Update Check", minute: "0", hour: "6", job: "/usr/local/bin/check-updates.sh" }
+    - { name: "Weekly System Update", minute: "0", hour: "2", job: "/usr/local/bin/update-system.sh" }
+    - { name: "VPN Software Update Check", minute: "0", hour: "4", job: "/usr/local/bin/update-vpn.sh" }
+
+- name: Create update log rotation
+  template:
+    src: update-logrotate.j2
+    dest: /etc/logrotate.d/vpn-updates
+    mode: '0644'
+
+- name: Create update status file
+  file:
+    path: /var/log/updates/update-status.json
+    state: touch
+    mode: '0644'
+
+- name: Create update lock file
+  file:
+    path: /var/run/vpn-update.lock
+    state: touch
+    mode: '0644'
+
+- name: Set initial update check
+  shell: |
+    /usr/local/bin/check-updates.sh --initial
+  args:
+    creates: /var/log/updates/initial-check-complete.flag

@@ -1,0 +1,146 @@
+---
+- name: Install monitoring tools
+  package:
+    name:
+      - htop
+      - iotop
+      - nethogs
+      - iftop
+      - vnstat
+      - sysstat
+      - prometheus-node-exporter
+      - grafana-server
+    state: present
+
+- name: Create monitoring directory
+  file:
+    path: /opt/monitoring
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create Prometheus configuration
+  template:
+    src: prometheus.yml.j2
+    dest: /opt/monitoring/prometheus.yml
+    mode: '0644'
+
+- name: Create Prometheus systemd service
+  template:
+    src: prometheus.service.j2
+    dest: /etc/systemd/system/prometheus.service
+    mode: '0644'
+
+- name: Create Grafana configuration
+  template:
+    src: grafana.ini.j2
+    dest: /etc/grafana/grafana.ini
+    mode: '0644'
+
+- name: Create Grafana dashboard
+  template:
+    src: vpn-dashboard.json.j2
+    dest: /var/lib/grafana/dashboards/vpn-dashboard.json
+    mode: '0644'
+
+- name: Start and enable Prometheus
+  systemd:
+    name: prometheus
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Start and enable Grafana
+  systemd:
+    name: grafana-server
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Start and enable node exporter
+  systemd:
+    name: prometheus-node-exporter
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create VPN metrics collector
+  template:
+    src: vpn-metrics.py.j2
+    dest: /opt/monitoring/vpn-metrics.py
+    mode: '0755'
+
+- name: Create VPN metrics systemd service
+  template:
+    src: vpn-metrics.service.j2
+    dest: /etc/systemd/system/vpn-metrics.service
+    mode: '0644'
+
+- name: Start VPN metrics service
+  systemd:
+    name: vpn-metrics
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create alerting rules
+  template:
+    src: alerts.yml.j2
+    dest: /opt/monitoring/alerts.yml
+    mode: '0644'
+
+- name: Create alertmanager configuration
+  template:
+    src: alertmanager.yml.j2
+    dest: /opt/monitoring/alertmanager.yml
+    mode: '0644'
+
+- name: Install Alertmanager
+  get_url:
+    url: "https://github.com/prometheus/alertmanager/releases/download/v0.25.0/alertmanager-0.25.0.linux-amd64.tar.gz"
+    dest: /tmp/alertmanager.tar.gz
+    mode: '0644'
+
+- name: Extract Alertmanager
+  unarchive:
+    src: /tmp/alertmanager.tar.gz
+    dest: /opt/
+    remote_src: true
+
+- name: Create Alertmanager systemd service
+  template:
+    src: alertmanager.service.j2
+    dest: /etc/systemd/system/alertmanager.service
+    mode: '0644'
+
+- name: Start Alertmanager
+  systemd:
+    name: alertmanager
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create log aggregation script
+  template:
+    src: log-aggregator.sh.j2
+    dest: /usr/local/bin/log-aggregator.sh
+    mode: '0755'
+
+- name: Create log aggregation cron job
+  cron:
+    name: "VPN Log Aggregation"
+    minute: "*/5"
+    job: "/usr/local/bin/log-aggregator.sh"
+
+- name: Create performance monitoring script
+  template:
+    src: performance-monitor.sh.j2
+    dest: /usr/local/bin/performance-monitor.sh
+    mode: '0755'
+
+- name: Create performance monitoring cron job
+  cron:
+    name: "Performance Monitoring"
+    minute: "*/1"
+    job: "/usr/local/bin/performance-monitor.sh"

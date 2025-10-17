@@ -1,0 +1,165 @@
+---
+- name: Install Docker dependencies
+  package:
+    name:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+    state: present
+
+- name: Add Docker GPG key
+  apt_key:
+    url: https://download.docker.com/linux/ubuntu/gpg
+    state: present
+
+- name: Add Docker repository
+  apt_repository:
+    repo: "deb [arch=amd64] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+    state: present
+
+- name: Update package cache
+  apt:
+    update_cache: true
+
+- name: Install Docker
+  package:
+    name:
+      - docker-ce
+      - docker-ce-cli
+      - containerd.io
+      - docker-compose-plugin
+    state: present
+
+- name: Start and enable Docker
+  systemd:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Add user to docker group
+  user:
+    name: "{{ ansible_user }}"
+    groups: docker
+    append: true
+
+- name: Create Docker Compose directory
+  file:
+    path: /opt/docker-compose
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create Docker Compose file for VPN services
+  template:
+    src: docker-compose.yml.j2
+    dest: /opt/docker-compose/docker-compose.yml
+    mode: '0644'
+
+- name: Create Xray Dockerfile
+  template:
+    src: Dockerfile.xray.j2
+    dest: /opt/docker-compose/Dockerfile.xray
+    mode: '0644'
+
+- name: Create V2Ray Dockerfile
+  template:
+    src: Dockerfile.v2ray.j2
+    dest: /opt/docker-compose/Dockerfile.v2ray
+    mode: '0644'
+
+- name: Create Shadowsocks Dockerfile
+  template:
+    src: Dockerfile.shadowsocks.j2
+    dest: /opt/docker-compose/Dockerfile.shadowsocks
+    mode: '0644'
+
+- name: Create Docker environment file
+  template:
+    src: .env.j2
+    dest: /opt/docker-compose/.env
+    mode: '0600'
+
+- name: Create Docker network
+  docker_network:
+    name: vpn-network
+    driver: bridge
+    state: present
+
+- name: Create Docker volumes
+  docker_volume:
+    name: "{{ item }}"
+    state: present
+  loop:
+    - vpn-configs
+    - vpn-certs
+    - vpn-logs
+
+- name: Build Docker images
+  docker_image:
+    name: "{{ item.name }}"
+    source: build
+    build:
+      path: /opt/docker-compose
+      dockerfile: "{{ item.dockerfile }}"
+    state: present
+  loop:
+    - { name: "advanced-vpn-xray", dockerfile: "Dockerfile.xray" }
+    - { name: "advanced-vpn-v2ray", dockerfile: "Dockerfile.v2ray" }
+    - { name: "advanced-vpn-shadowsocks", dockerfile: "Dockerfile.shadowsocks" }
+
+- name: Create Docker Compose systemd service
+  template:
+    src: docker-compose.service.j2
+    dest: /etc/systemd/system/docker-compose.service
+    mode: '0644'
+
+- name: Start Docker Compose services
+  systemd:
+    name: docker-compose
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create Docker health check script
+  template:
+    src: docker-health.sh.j2
+    dest: /usr/local/bin/docker-health.sh
+    mode: '0755'
+
+- name: Create Docker backup script
+  template:
+    src: docker-backup.sh.j2
+    dest: /usr/local/bin/docker-backup.sh
+    mode: '0755'
+
+- name: Create Docker update script
+  template:
+    src: docker-update.sh.j2
+    dest: /usr/local/bin/docker-update.sh
+    mode: '0755'
+
+- name: Create Docker monitoring script
+  template:
+    src: docker-monitor.sh.j2
+    dest: /usr/local/bin/docker-monitor.sh
+    mode: '0755'
+
+- name: Create Docker log rotation
+  template:
+    src: docker-logrotate.j2
+    dest: /etc/logrotate.d/docker-vpn
+    mode: '0644'
+
+- name: Create Docker cron jobs
+  cron:
+    name: "{{ item.name }}"
+    minute: "{{ item.minute }}"
+    hour: "{{ item.hour }}"
+    job: "{{ item.job }}"
+  loop:
+    - { name: "Docker Health Check", minute: "*/5", hour: "*", job: "/usr/local/bin/docker-health.sh" }
+    - { name: "Docker Monitoring", minute: "*/1", hour: "*", job: "/usr/local/bin/docker-monitor.sh" }
+    - { name: "Docker Backup", minute: "0", hour: "3", job: "/usr/local/bin/docker-backup.sh" }

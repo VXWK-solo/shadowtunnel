@@ -1,0 +1,17 @@
+# Quad VPN Connection URLs
+# Generated on {{ ansible_date_time.iso8601 }}
+
+{% for user in users %}
+# User: {{ user }}
+vless://{{ user_uuid[user] }}@{{ vpn_chains.quad_vpn.servers[0].host }}:{{ vpn_chains.quad_vpn.servers[0].port }}?encryption=none&security=tls&type=ws&host={{ vpn_chains.quad_vpn.servers[0].host }}&path=%2Fvless&sni={{ vpn_chains.quad_vpn.servers[0].host }}&flow=xtls-rprx-vision#Quad-VPN-{{ user }}
+
+{% endfor %}
+
+# Configuration files location:
+# /etc/xray/clients/{{ user }}-quad-vpn.json
+
+# Chain configuration:
+# 1. VLESS -> {{ vpn_chains.quad_vpn.servers[0].host }}
+# 2. VMess -> {{ vpn_chains.quad_vpn.servers[1].host }}
+# 3. Trojan -> {{ vpn_chains.quad_vpn.servers[2].host }}
+# 4. Shadowsocks -> {{ vpn_chains.quad_vpn.servers[3].host }}

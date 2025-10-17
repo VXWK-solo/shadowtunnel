@@ -1,0 +1,86 @@
+---
+- name: Create configs directory
+  file:
+    path: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}"
+    state: directory
+    mode: '0700'
+  delegate_to: localhost
+  become: false
+
+- name: Generate VLESS client configurations
+  template:
+    src: vless-client.json.j2
+    dest: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/vless-{{ item }}.json"
+    mode: '0600'
+  loop: "{{ users }}"
+  delegate_to: localhost
+  become: false
+  when: vpn_protocols.xray_enabled | default(true)
+
+- name: Generate VMess client configurations
+  template:
+    src: vmess-client.json.j2
+    dest: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/vmess-{{ item }}.json"
+    mode: '0600'
+  loop: "{{ users }}"
+  delegate_to: localhost
+  become: false
+  when: vpn_protocols.xray_enabled | default(true)
+
+- name: Generate Trojan client configurations
+  template:
+    src: trojan-client.json.j2
+    dest: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/trojan-{{ item }}.json"
+    mode: '0600'
+  loop: "{{ users }}"
+  delegate_to: localhost
+  become: false
+  when: vpn_protocols.xray_enabled | default(true)
+
+- name: Generate Shadowsocks client configurations
+  template:
+    src: shadowsocks-client.json.j2
+    dest: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/shadowsocks-{{ item }}.json"
+    mode: '0600'
+  loop: "{{ users }}"
+  delegate_to: localhost
+  become: false
+  when: vpn_protocols.xray_enabled | default(true)
+
+- name: Generate QR codes for mobile clients
+  shell: |
+    python3 -c "
+    import json
+    import qrcode
+    import sys
+    
+    with open('{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/{{ item.filename }}', 'r') as f:
+        config = json.load(f)
+    
+    # Convert to VLESS URL format
+    vless_url = 'vless://{{ vless_uuid }}@{{ ansible_ssh_host | default(inventory_hostname) }}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni={{ protocols.reality.dest.split(\":\")[0] }}&pbk={{ reality_public_key }}&sid={{ protocols.reality.shortId }}&type=tcp&headerType=none#{{ item.user }}'
+    
+    qr = qrcode.QRCode(version=1, box_size=10, border=5)
+    qr.add_data(vless_url)
+    qr.make(fit=True)
+    
+    img = qr.make_image(fill_color='black', back_color='white')
+    img.save('{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/{{ item.user }}-qr.png')
+    "
+  loop:
+    - { filename: "vless-{{ item }}.json", user: "{{ item }}" }
+  loop_control:
+    loop_var: item
+  with_items: "{{ users }}"
+  delegate_to: localhost
+  become: false
+  when: vpn_protocols.xray_enabled | default(true)
+  ignore_errors: true
+
+- name: Generate connection URLs
+  template:
+    src: connection-urls.txt.j2
+    dest: "{{ playbook_dir }}/configs/{{ ansible_ssh_host | default(inventory_hostname) }}/connection-urls.txt"
+    mode: '0600'
+  delegate_to: localhost
+  become: false

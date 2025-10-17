@@ -1,0 +1,113 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {% for user in users %}
+          {
+            "id": "{{ user_uuid[user] }}",
+            "flow": "xtls-rprx-vision"
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vless"
+        },
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/ssl/certs/vpn.crt",
+              "keyFile": "/etc/ssl/private/vpn.key"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "vmess",
+      "settings": {
+        "vnext": [
+          {
+            "address": "{{ vpn_chains.quad_vpn.servers[1].host }}",
+            "port": {{ vpn_chains.quad_vpn.servers[1].port }},
+            "users": [
+              {
+                "id": "{{ vpn_chains.quad_vpn.servers[1].uuid }}"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vmess"
+        },
+        "security": "tls"
+      }
+    },
+    {
+      "protocol": "trojan",
+      "settings": {
+        "servers": [
+          {
+            "address": "{{ vpn_chains.quad_vpn.servers[2].host }}",
+            "port": {{ vpn_chains.quad_vpn.servers[2].port }},
+            "password": "{{ vpn_chains.quad_vpn.servers[2].password }}"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/trojan"
+        },
+        "security": "tls"
+      }
+    },
+    {
+      "protocol": "shadowsocks",
+      "settings": {
+        "servers": [
+          {
+            "address": "{{ vpn_chains.quad_vpn.servers[3].host }}",
+            "port": {{ vpn_chains.quad_vpn.servers[3].port }},
+            "password": "{{ vpn_chains.quad_vpn.servers[3].password }}",
+            "method": "chacha20-ietf-poly1305"
+          }
+        ]
+      }
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "type": "field",
+        "outboundTag": "vmess",
+        "domain": ["geosite:category-ads-all"]
+      },
+      {
+        "type": "field",
+        "outboundTag": "trojan",
+        "domain": ["geosite:cn"]
+      },
+      {
+        "type": "field",
+        "outboundTag": "shadowsocks",
+        "ip": ["geoip:cn"]
+      }
+    ]
+  }
+}

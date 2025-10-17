@@ -1,0 +1,31 @@
+---
+- name: Generate quad VPN configuration
+  template:
+    src: quad-vpn.json.j2
+    dest: /etc/xray/quad-vpn.json
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart xray
+
+- name: Create quad VPN client configurations
+  template:
+    src: quad-vpn-client.json.j2
+    dest: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - path: "/etc/xray/clients/{{ item }}-quad-vpn.json"
+  loop_control:
+    loop_var: item
+  with_items: "{{ users }}"
+  notify: restart xray
+
+- name: Generate quad VPN connection URLs
+  template:
+    src: quad-vpn-urls.txt.j2
+    dest: /opt/vpn/quad-vpn-urls.txt
+    owner: root
+    group: root
+    mode: '0644'

@@ -1,0 +1,94 @@
+---
+- name: Install Node.js and npm
+  shell: |
+    curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+    apt-get install -y nodejs
+  args:
+    creates: /usr/bin/node
+
+- name: Install PM2 globally
+  npm:
+    name: pm2
+    global: true
+
+- name: Create web panel directory
+  file:
+    path: /opt/advanced-vpn-panel
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create web panel package.json
+  template:
+    src: package.json.j2
+    dest: /opt/advanced-vpn-panel/package.json
+    mode: '0644'
+
+- name: Create web panel server
+  template:
+    src: server.js.j2
+    dest: /opt/advanced-vpn-panel/server.js
+    mode: '0755'
+
+- name: Create web panel frontend
+  template:
+    src: index.html.j2
+    dest: /opt/advanced-vpn-panel/public/index.html
+    mode: '0644'
+
+- name: Create web panel CSS
+  template:
+    src: style.css.j2
+    dest: /opt/advanced-vpn-panel/public/style.css
+    mode: '0644'
+
+- name: Create web panel JavaScript
+  template:
+    src: app.js.j2
+    dest: /opt/advanced-vpn-panel/public/app.js
+    mode: '0644'
+
+- name: Install web panel dependencies
+  npm:
+    path: /opt/advanced-vpn-panel
+    state: present
+
+- name: Create web panel systemd service
+  template:
+    src: webpanel.service.j2
+    dest: /etc/systemd/system/advanced-vpn-panel.service
+    mode: '0644'
+
+- name: Start and enable web panel service
+  systemd:
+    name: advanced-vpn-panel
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Configure nginx for web panel
+  template:
+    src: nginx-webpanel.conf.j2
+    dest: /etc/nginx/sites-available/webpanel
+    mode: '0644'
+  notify: restart nginx
+
+- name: Enable web panel site
+  file:
+    src: /etc/nginx/sites-available/webpanel
+    dest: /etc/nginx/sites-enabled/webpanel
+    state: link
+  notify: restart nginx
+
+- name: Create web panel API endpoints
+  template:
+    src: api.js.j2
+    dest: /opt/advanced-vpn-panel/api.js
+    mode: '0755'
+
+- name: Create web panel configuration
+  template:
+    src: config.js.j2
+    dest: /opt/advanced-vpn-panel/config.js
+    mode: '0644'

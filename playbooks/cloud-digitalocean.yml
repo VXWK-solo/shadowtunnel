@@ -1,0 +1,59 @@
+---
+- name: Provision DigitalOcean Droplet
+  hosts: localhost
+  become: false
+  gather_facts: false
+  
+  tasks:
+    - name: Prompt for DigitalOcean API token
+      pause:
+        prompt: |
+          Enter your DigitalOcean API token:
+          (Get it from https://cloud.digitalocean.com/account/api/tokens)
+      register: do_token
+    
+    - name: Prompt for droplet region
+      pause:
+        prompt: |
+          Select region:
+          1) New York (nyc1)
+          2) San Francisco (sfo3)
+          3) Amsterdam (ams3)
+          4) Singapore (sgp1)
+          5) Frankfurt (fra1)
+          6) Toronto (tor1)
+          
+          Enter choice (1-6):
+      register: region_choice
+    
+    - name: Set region
+      set_fact:
+        do_region: "{{ ['nyc1', 'sfo3', 'ams3', 'sgp1', 'fra1', 'tor1'][region_choice.user_input | int - 1] }}"
+    
+    - name: Create DigitalOcean droplet
+      digital_ocean:
+        state: present
+        api_token: "{{ do_token.user_input }}"
+        name: "advanced-vpn-{{ ansible_date_time.epoch }}"
+        size: "{{ cloud_providers.digitalocean.size }}"
+        region: "{{ do_region }}"
+        image: "{{ cloud_providers.digitalocean.image }}"
+        ssh_key_ids: "{{ do_ssh_key_id | default(omit) }}"
+        wait: true
+        wait_timeout: 600
+      register: droplet
+    
+    - name: Add droplet to inventory
+      add_host:
+        name: "vpn_server"
+        groups: "vpn_servers"
+        ansible_host: "{{ droplet.droplet.ip_address }}"
+        ansible_user: "root"
+        ansible_ssh_private_key_file: "{{ ssh_key_file | default('~/.ssh/id_rsa') }}"
+    
+    - name: Wait for SSH to be available
+      wait_for:
+        host: "{{ droplet.droplet.ip_address }}"
+        port: 22
+        delay: 30
+        timeout: 300

@@ -1,0 +1,25 @@
+{
+  "v": "2",
+  "ps": "Double VPN - {{ item }}",
+  "add": "{{ vpn_chains.double_vpn.servers[0].host }}",
+  "port": "{{ vpn_chains.double_vpn.servers[0].port }}",
+  "id": "{{ user_uuid[item] }}",
+  "aid": "0",
+  "scy": "auto",
+  "net": "ws",
+  "type": "none",
+  "host": "{{ vpn_chains.double_vpn.servers[0].host }}",
+  "path": "/vless",
+  "tls": "tls",
+  "sni": "{{ vpn_chains.double_vpn.servers[0].host }}",
+  "chain": [
+    {
+      "add": "{{ vpn_chains.double_vpn.servers[1].host }}",
+      "port": "{{ vpn_chains.double_vpn.servers[1].port }}",
+      "id": "{{ vpn_chains.double_vpn.servers[1].uuid }}",
+      "net": "ws",
+      "path": "/vless",
+      "tls": "tls"
+    }
+  ]
+}

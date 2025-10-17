@@ -1,0 +1,115 @@
+{
+  "log": {
+    "loglevel": "{{ xray_config.log.loglevel }}",
+    "access": "{{ xray_config.log.access }}",
+    "error": "{{ xray_config.log.error }}"
+  },
+  "api": {{ xray_config.api | to_json }},
+  "stats": {{ xray_config.stats | to_json }},
+  "policy": {{ xray_config.policy | to_json }},
+  "inbounds": [
+{% if protocols.vless.enabled %}
+    {
+      "tag": "vless-in",
+      "port": {{ protocols.vless.port }},
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {
+            "id": "{{ vless_uuid }}",
+            "flow": "{{ protocols.vless.flow }}",
+            "email": "user@example.com"
+          }
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "{{ protocols.reality.dest }}",
+          "xver": 0,
+          "serverNames": {{ protocols.reality.serverNames | to_json }},
+          "privateKey": "{{ reality_private_key }}",
+          "shortIds": ["{{ protocols.reality.shortId }}"]
+        }
+      }
+    },
+{% endif %}
+{% if protocols.vmess.enabled %}
+    {
+      "tag": "vmess-in",
+      "port": {{ protocols.vmess.port }},
+      "protocol": "vmess",
+      "settings": {
+        "clients": [
+          {
+            "id": "{{ vmess_uuid }}",
+            "level": 0,
+            "alterId": {{ protocols.vmess.alterId }},
+            "email": "user@example.com"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "{{ tls.certFile }}",
+              "keyFile": "{{ tls.keyFile }}"
+            }
+          ],
+          "minVersion": "{{ tls.minVersion }}",
+          "cipherSuites": "{{ tls.cipherSuites }}"
+        }
+      }
+    },
+{% endif %}
+{% if protocols.trojan.enabled %}
+    {
+      "tag": "trojan-in",
+      "port": {{ protocols.trojan.port }},
+      "protocol": "trojan",
+      "settings": {
+        "clients": [
+          {
+            "password": "{{ trojan_password }}",
+            "email": "user@example.com"
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "{{ tls.certFile }}",
+              "keyFile": "{{ tls.keyFile }}"
+            }
+          ],
+          "minVersion": "{{ tls.minVersion }}",
+          "cipherSuites": "{{ tls.cipherSuites }}"
+        }
+      }
+    },
+{% endif %}
+{% if protocols.shadowsocks.enabled %}
+    {
+      "tag": "shadowsocks-in",
+      "port": {{ protocols.shadowsocks.port }},
+      "protocol": "shadowsocks",
+      "settings": {
+        "method": "{{ protocols.shadowsocks.method }}",
+        "password": "{{ shadowsocks_password }}",
+        "network": "tcp,udp"
+      }
+    }
+{% endif %}
+  ],
+  "outbounds": {{ xray_config.outbounds | to_json }},
+  "routing": {{ xray_config.routing | to_json }}
+}

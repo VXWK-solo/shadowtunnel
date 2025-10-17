@@ -1,0 +1,118 @@
+---
+- name: Test VPN Server Configuration
+  hosts: "{{ target_hosts | default('vpn_servers') }}"
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Test Xray configuration
+      shell: |
+        {{ xray_install_dir | default('/usr/local/bin') }}/xray -test -config {{ xray_config_dir | default('/etc/xray') }}/config.json
+      register: xray_test
+      when: vpn_protocols.xray_enabled | default(true)
+      tags: [test, xray]
+    
+    - name: Test V2Ray configuration
+      shell: |
+        {{ v2ray_install_dir | default('/usr/local/bin') }}/v2ray -test -config {{ v2ray_config_dir | default('/etc/v2ray') }}/config.json
+      register: v2ray_test
+      when: vpn_protocols.v2ray_enabled | default(false)
+      tags: [test, v2ray]
+    
+    - name: Test Nginx configuration
+      shell: nginx -t
+      register: nginx_test
+      tags: [test, nginx]
+    
+    - name: Test SSL certificates
+      shell: |
+        if [ -f /etc/letsencrypt/live/{{ tls.domain | default('example.com') }}/cert.pem ]; then
+          openssl x509 -in /etc/letsencrypt/live/{{ tls.domain | default('example.com') }}/cert.pem -noout -text
+        else
+          echo "No SSL certificate found"
+        fi
+      register: ssl_test
+      tags: [test, ssl]
+    
+    - name: Test firewall rules
+      shell: ufw status verbose
+      register: firewall_test
+      tags: [test, firewall]
+    
+    - name: Test DNS resolution
+      shell: |
+        nslookup google.com
+        nslookup {{ tls.domain | default('example.com') }}
+      register: dns_test
+      tags: [test, dns]
+    
+    - name: Test port connectivity
+      wait_for:
+        host: "{{ ansible_ssh_host | default(inventory_hostname) }}"
+        port: "{{ item }}"
+        timeout: 10
+      loop:
+        - "{{ security.ssh_port | default(4160) }}"
+        - "443"
+        - "8388"
+      register: port_test
+      tags: [test, ports]
+    
+    - name: Test VPN protocols
+      shell: |
+        # Test VLESS
+        if systemctl is-active --quiet xray; then
+          echo "VLESS: Service running"
+        else
+          echo "VLESS: Service not running"
+        fi
+        
+        # Test VMess
+        if systemctl is-active --quiet v2ray; then
+          echo "VMess: Service running"
+        else
+          echo "VMess: Service not running"
+        fi
+        
+        # Test Shadowsocks
+        if ss -tulpn | grep -q :8388; then
+          echo "Shadowsocks: Port 8388 listening"
+        else
+          echo "Shadowsocks: Port 8388 not listening"
+        fi
+      register: protocol_test
+      tags: [test, protocols]
+    
+    - name: Test web panel
+      uri:
+        url: "http://{{ ansible_ssh_host | default(inventory_hostname) }}:{{ web_panel.port | default(2053) }}"
+        method: GET
+        status_code: 200
+      register: webpanel_test
+      when: web_panel.enabled | default(false)
+      tags: [test, webpanel]
+    
+    - name: Test monitoring
+      uri:
+        url: "http://{{ ansible_ssh_host | default(inventory_hostname) }}:{{ monitoring.prometheus.port | default(9090) }}"
+        method: GET
+        status_code: 200
+      register: monitoring_test
+      when: monitoring.enabled | default(false)
+      tags: [test, monitoring]
+    
+    - name: Display test results
+      debug:
+        msg: |
+          === Test Results ===
+          Xray Config: {{ xray_test.stdout_lines if xray_test is defined else "Not tested" }}
+          V2Ray Config: {{ v2ray_test.stdout_lines if v2ray_test is defined else "Not tested" }}
+          Nginx Config: {{ nginx_test.stdout_lines if nginx_test is defined else "Not tested" }}
+          SSL Certificates: {{ ssl_test.stdout_lines if ssl_test is defined else "Not tested" }}
+          Firewall: {{ firewall_test.stdout_lines if firewall_test is defined else "Not tested" }}
+          DNS: {{ dns_test.stdout_lines if dns_test is defined else "Not tested" }}
+          Ports: {{ port_test.results | map(attribute='state') | list if port_test is defined else "Not tested" }}
+          Protocols: {{ protocol_test.stdout_lines if protocol_test is defined else "Not tested" }}
+          Web Panel: {{ webpanel_test.status if webpanel_test is defined else "Not tested" }}
+          Monitoring: {{ monitoring_test.status if monitoring_test is defined else "Not tested" }}
+      tags: [test, results]

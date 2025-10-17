@@ -1,0 +1,40 @@
+{
+  "v": "2",
+  "ps": "Quad VPN - {{ item }}",
+  "add": "{{ vpn_chains.quad_vpn.servers[0].host }}",
+  "port": "{{ vpn_chains.quad_vpn.servers[0].port }}",
+  "id": "{{ user_uuid[item] }}",
+  "aid": "0",
+  "scy": "auto",
+  "net": "ws",
+  "type": "none",
+  "host": "{{ vpn_chains.quad_vpn.servers[0].host }}",
+  "path": "/vless",
+  "tls": "tls",
+  "sni": "{{ vpn_chains.quad_vpn.servers[0].host }}",
+  "flow": "xtls-rprx-vision",
+  "chain": [
+    {
+      "add": "{{ vpn_chains.quad_vpn.servers[1].host }}",
+      "port": "{{ vpn_chains.quad_vpn.servers[1].port }}",
+      "id": "{{ vpn_chains.quad_vpn.servers[1].uuid }}",
+      "net": "ws",
+      "path": "/vmess",
+      "tls": "tls"
+    },
+    {
+      "add": "{{ vpn_chains.quad_vpn.servers[2].host }}",
+      "port": "{{ vpn_chains.quad_vpn.servers[2].port }}",
+      "password": "{{ vpn_chains.quad_vpn.servers[2].password }}",
+      "net": "ws",
+      "path": "/trojan",
+      "tls": "tls"
+    },
+    {
+      "add": "{{ vpn_chains.quad_vpn.servers[3].host }}",
+      "port": "{{ vpn_chains.quad_vpn.servers[3].port }}",
+      "password": "{{ vpn_chains.quad_vpn.servers[3].password }}",
+      "method": "chacha20-ietf-poly1305"
+    }
+  ]
+}

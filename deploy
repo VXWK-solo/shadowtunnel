@@ -1,0 +1,619 @@
+#!/usr/bin/env bash
+
+set -e
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+print_status() {
+    echo -e "${BLUE}[INFO]${NC} $1"
+}
+
+print_success() {
+    echo -e "${GREEN}[SUCCESS]${NC} $1"
+}
+
+print_warning() {
+    echo -e "${YELLOW}[WARNING]${NC} $1"
+}
+
+print_error() {
+    echo -e "${RED}[ERROR]${NC} $1"
+}
+
+command_exists() {
+    command -v "$1" >/dev/null 2>&1
+}
+
+install_dependencies() {
+    print_status "Installing dependencies..."
+    
+    if command_exists pip3; then
+        pip3 install --user ansible pyyaml jinja2 qrcode[pil]
+    elif command_exists pip; then
+        pip install --user ansible pyyaml jinja2 qrcode[pil]
+    else
+        print_error "pip not found. Please install Python pip first."
+        exit 1
+    fi
+}
+
+check_ansible() {
+    if ! command_exists ansible-playbook; then
+        print_warning "Ansible not found. Installing..."
+        install_dependencies
+    fi
+}
+
+validate_config() {
+    if [ ! -f "config.cfg" ]; then
+        print_error "config.cfg not found. Please create configuration file first."
+        exit 1
+    fi
+    
+    if ! python3 -c "import yaml; yaml.safe_load(open('config.cfg'))" 2>/dev/null; then
+        print_error "Invalid YAML syntax in config.cfg"
+        exit 1
+    fi
+}
+
+show_menu() {
+    clear
+    echo "ShadowTunnel Manager"
+    echo "==================="
+    echo ""
+    echo "1) Initial setup and deployment"
+    echo "2) Update users"
+    echo "3) Check system status"
+    echo "4) Run tests"
+    echo "5) Create backup"
+    echo "6) Restore from backup"
+    echo "7) View logs"
+    echo "8) Deploy with Docker"
+    echo "9) Configure settings"
+    echo "10) Open web panel"
+    echo "11) Open monitoring (Grafana)"
+    echo "12) Open metrics (Prometheus)"
+    echo "13) Deploy double VPN"
+    echo "14) Deploy quad VPN"
+    echo ""
+    echo "h) Show help"
+    echo "q) Exit"
+    echo ""
+}
+
+handle_menu_selection() {
+    local choice
+    read -p "Select option (1-14, h, q): " choice
+    
+    case $choice in
+        1)
+            print_status "Starting initial setup..."
+            run_setup_wizard
+            ;;
+        2)
+            print_status "Updating users..."
+            ansible-playbook playbooks/users.yml -t update-users
+            ;;
+        3)
+            print_status "Checking system status..."
+            ansible-playbook playbooks/status.yml -t status
+            ;;
+        4)
+            print_status "Running tests..."
+            ansible-playbook playbooks/test.yml -t test
+            ;;
+        5)
+            print_status "Creating backup..."
+            ansible-playbook playbooks/backup.yml -t backup
+            ;;
+        6)
+            print_status "Restoring from backup..."
+            run_restore_wizard
+            ;;
+        7)
+            print_status "Viewing logs..."
+            run_logs_viewer
+            ;;
+        8)
+            print_status "Deploying with Docker..."
+            ansible-playbook main.yml -t docker
+            ;;
+        9)
+            print_status "Configuring settings..."
+            run_config_wizard
+            ;;
+        10)
+            print_status "Opening web panel..."
+            open_web_panel
+            ;;
+        11)
+            print_status "Opening monitoring..."
+            open_monitoring
+            ;;
+        12)
+            print_status "Opening metrics..."
+            open_metrics
+            ;;
+        13)
+            print_status "Deploying double VPN..."
+            ansible-playbook main.yml --tags double-vpn
+            ;;
+        14)
+            print_status "Deploying quad VPN..."
+            ansible-playbook main.yml --tags quad-vpn
+            ;;
+        h|H)
+            show_help
+            ;;
+        q|Q)
+            print_success "Goodbye!"
+            exit 0
+            ;;
+        *)
+            print_error "Invalid choice. Try again."
+            sleep 2
+            ;;
+    esac
+}
+
+run_setup_wizard() {
+    clear
+    echo "Initial Setup Wizard"
+    echo "==================="
+    echo ""
+    
+    if [ -f "config.cfg" ]; then
+        echo "Configuration file already exists."
+        read -p "Overwrite existing configuration? (y/N): " overwrite
+        if [[ ! $overwrite =~ ^[Yy]$ ]]; then
+            print_status "Using existing configuration."
+            ansible-playbook main.yml
+            return
+        fi
+    fi
+    
+    create_config_interactive
+    
+    print_status "Starting deployment..."
+    ansible-playbook main.yml
+}
+
+create_config_interactive() {
+    print_status "Creating configuration..."
+    
+    echo "User setup:"
+    read -p "Enter usernames separated by comma (e.g., phone,laptop,desktop): " users_input
+    users=$(echo "$users_input" | tr ',' '\n' | sed 's/^/  - /' | tr '\n' ' ')
+    
+    echo "VPN Protocols:"
+    echo "1) Xray only (recommended)"
+    echo "2) Xray + V2Ray"
+    echo "3) Xray + Shadowsocks"
+    echo "4) All protocols"
+    read -p "Choose option (1-4): " protocol_choice
+    
+    case $protocol_choice in
+        1) xray_enabled=true; v2ray_enabled=false; shadowsocks_enabled=false ;;
+        2) xray_enabled=true; v2ray_enabled=true; shadowsocks_enabled=false ;;
+        3) xray_enabled=true; v2ray_enabled=false; shadowsocks_enabled=true ;;
+        4) xray_enabled=true; v2ray_enabled=true; shadowsocks_enabled=true ;;
+        *) xray_enabled=true; v2ray_enabled=false; shadowsocks_enabled=false ;;
+    esac
+    
+    echo "Web Panel:"
+    read -p "Enable web management panel? (Y/n): " webpanel_choice
+    webpanel_enabled=${webpanel_choice:-Y}
+    
+    echo "Monitoring:"
+    read -p "Enable monitoring system? (Y/n): " monitoring_choice
+    monitoring_enabled=${monitoring_choice:-Y}
+    
+    echo "Backup:"
+    read -p "Enable automatic backup? (Y/n): " backup_choice
+    backup_enabled=${backup_choice:-Y}
+    
+    generate_config_file "$users" "$xray_enabled" "$v2ray_enabled" "$shadowsocks_enabled" "$webpanel_enabled" "$monitoring_enabled" "$backup_enabled"
+}
+
+generate_config_file() {
+    local users="$1"
+    local xray_enabled="$2"
+    local v2ray_enabled="$3"
+    local shadowsocks_enabled="$4"
+    local webpanel_enabled="$5"
+    local monitoring_enabled="$6"
+    local backup_enabled="$7"
+    
+    cat > config.cfg << EOF
+---
+# Advanced VPN Server Configuration
+# Generated by setup wizard on $(date)
+
+# Users
+users:
+$users
+
+# VPN Protocols
+vpn_protocols:
+  xray_enabled: $xray_enabled
+  v2ray_enabled: $v2ray_enabled
+  shadowsocks_enabled: $shadowsocks_enabled
+
+# Web Panel
+web_panel:
+  enabled: $webpanel_enabled
+  port: 2053
+  username: "admin"
+  password: "admin123"
+
+# Monitoring
+monitoring:
+  enabled: $monitoring_enabled
+  prometheus:
+    enabled: true
+    port: 9090
+  grafana:
+    enabled: true
+    port: 3000
+    admin_password: "grafana123"
+
+# Backup
+backup:
+  enabled: $backup_enabled
+  schedule: "0 3 * * *"
+  retention_days: 30
+  encryption_enabled: true
+
+# Security
+security:
+  ssh_port: 4160
+  client_isolation: true
+  auto_updates: true
+  reboot_time: "06:00"
+
+# Privacy
+privacy:
+  log_level: -1
+  enhancements_enabled: true
+
+# DNS
+dns:
+  encryption_enabled: true
+  adblock_enabled: true
+  servers:
+    ipv4:
+      - 1.1.1.1
+      - 1.0.0.1
+
+# Network
+network:
+  ipv6_enabled: true
+  mtu: 0
+  keepalive: 0
+
+# Cloud Providers
+cloud_providers:
+  digitalocean:
+    size: "s-1vcpu-1gb"
+    image: "ubuntu-22-04-x64"
+  ec2:
+    size: "t2.micro"
+    image: "ubuntu-jammy-22.04"
+  gce:
+    size: "e2-micro"
+    image: "ubuntu-2204-lts"
+EOF
+    
+    print_success "Configuration created: config.cfg"
+}
+
+show_help() {
+    clear
+    echo "ShadowTunnel - Help"
+    echo "==================="
+    echo ""
+    echo "Basic commands:"
+    echo "  ./deploy                    - Show interactive menu"
+    echo "  ./deploy menu              - Show interactive menu"
+    echo "  ./deploy update-users      - Update users"
+    echo "  ./deploy status            - Check system status"
+    echo "  ./deploy test              - Run tests"
+    echo ""
+    echo "Data management:"
+    echo "  ./deploy backup            - Create backup"
+    echo "  ./deploy restore           - Restore from backup"
+    echo "  ./deploy logs              - View logs"
+    echo ""
+    echo "Multi-hop VPN:"
+    echo "  ./deploy --tags double-vpn - Deploy double VPN"
+    echo "  ./deploy --tags quad-vpn   - Deploy quad VPN"
+    echo ""
+    echo "Additional commands:"
+    echo "  ./deploy docker           - Deploy with Docker"
+    echo "  ./deploy help              - Show this help"
+    echo ""
+    echo "Web interfaces:"
+    echo "  Web management panel:     http://your-server:2053"
+    echo "  Grafana monitoring:       http://your-server:3000"
+    echo "  Prometheus metrics:       http://your-server:9090"
+    echo ""
+    echo "Important files:"
+    echo "  config.cfg                 - Main configuration"
+    echo "  configs/                   - Generated configurations"
+    echo "  connection-urls.txt        - Connection URLs"
+    echo ""
+}
+
+run_restore_wizard() {
+    clear
+    echo "Backup Restore Wizard"
+    echo "===================="
+    echo ""
+    
+    if [ -d "/opt/backups" ]; then
+        echo "Available backups:"
+        ls -la /opt/backups/ | grep -E "\.(tar\.gz|zip)$" | nl
+        echo ""
+        read -p "Enter backup number to restore: " backup_choice
+        
+        backup_file=$(ls /opt/backups/*.tar.gz | sed -n "${backup_choice}p")
+        
+        if [ -n "$backup_file" ]; then
+            echo "Restoring from: $backup_file"
+            read -p "Continue restore? (y/N): " confirm
+            
+            if [[ $confirm =~ ^[Yy]$ ]]; then
+                print_status "Restoring from backup..."
+                ansible-playbook playbooks/restore.yml -e "backup_file=$backup_file" -t restore
+            else
+                print_status "Restore cancelled."
+            fi
+        else
+            print_error "Invalid backup choice."
+        fi
+    else
+        print_error "Backup directory not found."
+    fi
+}
+
+run_logs_viewer() {
+    clear
+    echo "Log Viewer"
+    echo "=========="
+    echo ""
+    echo "Select log type:"
+    echo "1) VPN logs (Xray/V2Ray)"
+    echo "2) Web panel logs"
+    echo "3) Monitoring logs"
+    echo "4) System logs"
+    echo "5) Firewall logs"
+    echo ""
+    read -p "Choose option (1-5): " log_choice
+    
+    case $log_choice in
+        1)
+            print_status "Showing VPN logs..."
+            tail -f /var/log/xray/error.log /var/log/v2ray/error.log 2>/dev/null || echo "VPN logs not found"
+            ;;
+        2)
+            print_status "Showing web panel logs..."
+            journalctl -u advanced-vpn-panel -f 2>/dev/null || echo "Web panel logs not found"
+            ;;
+        3)
+            print_status "Showing monitoring logs..."
+            journalctl -u prometheus -f 2>/dev/null || echo "Monitoring logs not found"
+            ;;
+        4)
+            print_status "Showing system logs..."
+            journalctl -f
+            ;;
+        5)
+            print_status "Showing firewall logs..."
+            tail -f /var/log/ufw.log 2>/dev/null || echo "Firewall logs not found"
+            ;;
+        *)
+            print_error "Invalid choice."
+            ;;
+    esac
+}
+
+run_config_wizard() {
+    clear
+    echo "Configuration Wizard"
+    echo "==================="
+    echo ""
+    
+    if [ -f "config.cfg" ]; then
+        echo "Edit existing configuration"
+        echo ""
+        echo "1) Edit users"
+        echo "2) Change VPN protocols"
+        echo "3) Configure web panel"
+        echo "4) Configure monitoring"
+        echo "5) Configure backup"
+        echo "6) Edit file directly"
+        echo ""
+        read -p "Choose option (1-6): " config_choice
+        
+        case $config_choice in
+            1)
+                edit_users_config
+                ;;
+            2)
+                edit_protocols_config
+                ;;
+            3)
+                edit_webpanel_config
+                ;;
+            4)
+                edit_monitoring_config
+                ;;
+            5)
+                edit_backup_config
+                ;;
+            6)
+                ${EDITOR:-nano} config.cfg
+                ;;
+            *)
+                print_error "Invalid choice."
+                ;;
+        esac
+    else
+        print_status "Configuration file not found. Creating new one..."
+        create_config_interactive
+    fi
+}
+
+open_web_panel() {
+    local server_ip=$(grep -oP 'ansible_host:\s*\K[0-9.]+' inventory 2>/dev/null | head -1)
+    if [ -z "$server_ip" ]; then
+        read -p "Enter server IP address: " server_ip
+    fi
+    
+    local url="http://$server_ip:2053"
+    print_status "Opening web panel: $url"
+    
+    if command -v xdg-open >/dev/null; then
+        xdg-open "$url"
+    elif command -v open >/dev/null; then
+        open "$url"
+    else
+        echo "Open in browser: $url"
+    fi
+}
+
+open_monitoring() {
+    local server_ip=$(grep -oP 'ansible_host:\s*\K[0-9.]+' inventory 2>/dev/null | head -1)
+    if [ -z "$server_ip" ]; then
+        read -p "Enter server IP address: " server_ip
+    fi
+    
+    local url="http://$server_ip:3000"
+    print_status "Opening Grafana: $url"
+    
+    if command -v xdg-open >/dev/null; then
+        xdg-open "$url"
+    elif command -v open >/dev/null; then
+        open "$url"
+    else
+        echo "Open in browser: $url"
+    fi
+}
+
+open_metrics() {
+    local server_ip=$(grep -oP 'ansible_host:\s*\K[0-9.]+' inventory 2>/dev/null | head -1)
+    if [ -z "$server_ip" ]; then
+        read -p "Enter server IP address: " server_ip
+    fi
+    
+    local url="http://$server_ip:9090"
+    print_status "Opening Prometheus: $url"
+    
+    if command -v xdg-open >/dev/null; then
+        xdg-open "$url"
+    elif command -v open >/dev/null; then
+        open "$url"
+    else
+        echo "Open in browser: $url"
+    fi
+}
+
+run_deployment() {
+    print_status "Starting Advanced VPN deployment..."
+    
+    case "$1" in
+        "update-users")
+            print_status "Updating users..."
+            ansible-playbook playbooks/users.yml -t update-users
+            ;;
+        "backup")
+            print_status "Creating backup..."
+            ansible-playbook playbooks/backup.yml -t backup
+            ;;
+        "restore")
+            print_status "Restoring from backup..."
+            ansible-playbook playbooks/restore.yml -t restore
+            ;;
+        "monitor")
+            print_status "Starting monitoring..."
+            ansible-playbook playbooks/monitoring.yml -t monitoring
+            ;;
+        "update")
+            print_status "Updating system..."
+            ansible-playbook playbooks/update.yml -t update
+            ;;
+        "docker")
+            print_status "Deploying with Docker..."
+            ansible-playbook main.yml -t docker
+            ;;
+        "status")
+            print_status "Checking system status..."
+            ansible-playbook playbooks/status.yml -t status
+            ;;
+        "logs")
+            print_status "Viewing logs..."
+            ansible-playbook playbooks/logs.yml -t logs
+            ;;
+        "test")
+            print_status "Running tests..."
+            ansible-playbook playbooks/test.yml -t test
+            ;;
+        "menu")
+            while true; do
+                show_menu
+                handle_menu_selection
+                echo ""
+                read -p "Press Enter to continue..."
+            done
+            ;;
+        *)
+            print_status "Running full deployment..."
+            ansible-playbook main.yml "$@"
+            ;;
+    esac
+}
+
+main() {
+    print_status "ShadowTunnel Deployment Script"
+    print_status "==============================="
+    
+    if [ "$EUID" -eq 0 ]; then
+        print_warning "Running as root is not recommended. Consider using a regular user."
+    fi
+    
+    check_ansible
+    
+    if [ $# -eq 0 ]; then
+        show_menu
+        handle_menu_selection
+        return
+    fi
+    
+    if [ "$1" = "menu" ]; then
+        while true; do
+            show_menu
+            handle_menu_selection
+            echo ""
+            read -p "Press Enter to continue..."
+        done
+        return
+    fi
+    
+    if [ "$1" != "help" ] && [ "$1" != "h" ]; then
+        validate_config
+    fi
+    
+    run_deployment "$@"
+    
+    if [ "$1" != "help" ] && [ "$1" != "h" ] && [ "$1" != "menu" ]; then
+        print_success "Operation completed successfully!"
+        print_status "Configuration files are in ./configs/ directory"
+        print_status "Check connection-urls.txt for connection details"
+    fi
+}
+
+main "$@"

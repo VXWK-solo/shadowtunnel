@@ -1,0 +1,93 @@
+---
+- name: Create xray user and group
+  user:
+    name: "{{ xray_user }}"
+    group: "{{ xray_group }}"
+    system: true
+    shell: /bin/false
+    home: /var/lib/xray
+    create_home: true
+
+- name: Create xray directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ xray_user }}"
+    group: "{{ xray_group }}"
+    mode: '0755'
+  loop:
+    - "{{ xray_config_dir }}"
+    - "{{ xray_log_dir }}"
+    - "/var/lib/xray"
+
+- name: Download Xray binary
+  get_url:
+    url: "https://github.com/XTLS/Xray-core/releases/download/v{{ xray_version }}/Xray-linux-{{ xray_arch }}.zip"
+    dest: "/tmp/xray.zip"
+    mode: '0644'
+  register: xray_download
+
+- name: Extract Xray binary
+  unarchive:
+    src: "/tmp/xray.zip"
+    dest: "/tmp/"
+    remote_src: true
+    creates: "/tmp/xray"
+
+- name: Install Xray binary
+  copy:
+    src: "/tmp/xray"
+    dest: "{{ xray_install_dir }}/xray"
+    owner: root
+    group: root
+    mode: '0755'
+    remote_src: true
+
+- name: Create Xray systemd service
+  template:
+    src: xray.service.j2
+    dest: /etc/systemd/system/xray.service
+    mode: '0644'
+  notify: restart xray
+
+- name: Generate UUIDs for protocols
+  set_fact:
+    vless_uuid: "{{ ansible_date_time.epoch | random(seed=inventory_hostname + 'vless') | string | regex_replace('^(.{8})(.{4})(.{4})(.{4})(.{12})$', '\\1-\\2-\\3-\\4-\\5') }}"
+    vmess_uuid: "{{ ansible_date_time.epoch | random(seed=inventory_hostname + 'vmess') | string | regex_replace('^(.{8})(.{4})(.{4})(.{4})(.{12})$', '\\1-\\2-\\3-\\4-\\5') }}"
+    trojan_password: "{{ ansible_date_time.epoch | random(seed=inventory_hostname + 'trojan') | string | truncate(16, True, '') }}"
+    shadowsocks_password: "{{ ansible_date_time.epoch | random(seed=inventory_hostname + 'shadowsocks') | string | truncate(16, True, '') }}"
+
+- name: Generate REALITY keys
+  shell: |
+    {{ xray_install_dir }}/xray x25519
+  register: reality_keys
+  changed_when: false
+
+- name: Parse REALITY keys
+  set_fact:
+    reality_private_key: "{{ reality_keys.stdout_lines[0].split(':')[1].strip() }}"
+    reality_public_key: "{{ reality_keys.stdout_lines[1].split(':')[1].strip() }}"
+
+- name: Generate Xray configuration
+  template:
+    src: config.json.j2
+    dest: "{{ xray_config_dir }}/config.json"
+    owner: "{{ xray_user }}"
+    group: "{{ xray_group }}"
+    mode: '0600'
+  notify: restart xray
+
+- name: Enable and start Xray service
+  systemd:
+    name: xray
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Clean up temporary files
+  file:
+    path: "{{ item }}"
+    state: absent
+  loop:
+    - "/tmp/xray.zip"
+    - "/tmp/xray"

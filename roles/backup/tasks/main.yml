@@ -1,0 +1,130 @@
+---
+- name: Install backup tools
+  package:
+    name:
+      - rsync
+      - tar
+      - gzip
+      - openssl
+      - rclone
+    state: present
+
+- name: Create backup directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+  loop:
+    - /opt/backups
+    - /opt/backups/configs
+    - /opt/backups/certs
+    - /opt/backups/logs
+    - /opt/backups/database
+
+- name: Create backup configuration
+  template:
+    src: backup.conf.j2
+    dest: /opt/backups/backup.conf
+    mode: '0644'
+
+- name: Create backup script
+  template:
+    src: backup.sh.j2
+    dest: /usr/local/bin/vpn-backup.sh
+    mode: '0755'
+
+- name: Create restore script
+  template:
+    src: restore.sh.j2
+    dest: /usr/local/bin/vpn-restore.sh
+    mode: '0755'
+
+- name: Create backup systemd service
+  template:
+    src: backup.service.j2
+    dest: /etc/systemd/system/vpn-backup.service
+    mode: '0644'
+
+- name: Create backup timer
+  template:
+    src: backup.timer.j2
+    dest: /etc/systemd/system/vpn-backup.timer
+    mode: '0644'
+
+- name: Enable backup timer
+  systemd:
+    name: vpn-backup.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Create encryption key for backups
+  shell: |
+    openssl rand -base64 32 > /opt/backups/backup.key
+    chmod 600 /opt/backups/backup.key
+  args:
+    creates: /opt/backups/backup.key
+
+- name: Configure cloud storage (if enabled)
+  template:
+    src: rclone.conf.j2
+    dest: /root/.config/rclone/rclone.conf
+    mode: '0600'
+  when: backup.cloud_storage.enabled | default(false)
+
+- name: Test cloud storage connection
+  shell: |
+    rclone lsd {{ backup.cloud_storage.provider }}:
+  when: backup.cloud_storage.enabled | default(false)
+  ignore_errors: true
+
+- name: Create incremental backup script
+  template:
+    src: incremental-backup.sh.j2
+    dest: /usr/local/bin/incremental-backup.sh
+    mode: '0755'
+
+- name: Create backup verification script
+  template:
+    src: verify-backup.sh.j2
+    dest: /usr/local/bin/verify-backup.sh
+    mode: '0755'
+
+- name: Create backup cleanup script
+  template:
+    src: cleanup-backups.sh.j2
+    dest: /usr/local/bin/cleanup-backups.sh
+    mode: '0755'
+
+- name: Create backup cleanup cron job
+  cron:
+    name: "Backup Cleanup"
+    hour: "2"
+    minute: "0"
+    job: "/usr/local/bin/cleanup-backups.sh"
+
+- name: Create backup notification script
+  template:
+    src: backup-notify.sh.j2
+    dest: /usr/local/bin/backup-notify.sh
+    mode: '0755'
+
+- name: Perform initial backup
+  shell: |
+    /usr/local/bin/vpn-backup.sh --initial
+  args:
+    creates: /opt/backups/initial-backup-complete.flag
+
+- name: Create backup status file
+  file:
+    path: /opt/backups/backup-status.json
+    state: touch
+    mode: '0644'
+
+- name: Create backup log rotation
+  template:
+    src: backup-logrotate.j2
+    dest: /etc/logrotate.d/vpn-backup
+    mode: '0644'

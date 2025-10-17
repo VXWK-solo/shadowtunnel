@@ -1,0 +1,141 @@
+---
+- name: Provision AWS EC2 Instance
+  hosts: localhost
+  become: false
+  gather_facts: false
+  
+  tasks:
+    - name: Prompt for AWS credentials
+      pause:
+        prompt: |
+          Enter AWS credentials:
+          Access Key ID:
+      register: aws_access_key
+      
+    - name: Prompt for AWS secret key
+      pause:
+        prompt: |
+          Enter AWS Secret Access Key:
+      register: aws_secret_key
+      
+    - name: Prompt for AWS region
+      pause:
+        prompt: |
+          Select AWS region:
+          1) us-east-1 (N. Virginia)
+          2) us-west-2 (Oregon)
+          3) eu-west-1 (Ireland)
+          4) eu-central-1 (Frankfurt)
+          5) ap-southeast-1 (Singapore)
+          6) ap-northeast-1 (Tokyo)
+          
+          Enter choice (1-6):
+      register: region_choice
+    
+    - name: Set AWS region
+      set_fact:
+        aws_region: "{{ ['us-east-1', 'us-west-2', 'eu-west-1', 'eu-central-1', 'ap-southeast-1', 'ap-northeast-1'][region_choice.user_input | int - 1] }}"
+    
+    - name: Prompt for key pair name
+      pause:
+        prompt: |
+          Enter existing EC2 key pair name (or press Enter to create new):
+      register: key_pair_input
+    
+    - name: Create EC2 key pair if needed
+      ec2_key:
+        name: "advanced-vpn-key-{{ ansible_date_time.epoch }}"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key.user_input }}"
+        aws_secret_key: "{{ aws_secret_key.user_input }}"
+        state: present
+      when: key_pair_input.user_input == ""
+      register: new_key_pair
+    
+    - name: Set key pair name
+      set_fact:
+        key_pair_name: "{{ new_key_pair.key.name if key_pair_input.user_input == '' else key_pair_input.user_input }}"
+    
+    - name: Create security group
+      ec2_group:
+        name: "advanced-vpn-sg-{{ ansible_date_time.epoch }}"
+        description: "Security group for Advanced VPN Server"
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key.user_input }}"
+        aws_secret_key: "{{ aws_secret_key.user_input }}"
+        rules:
+          - proto: tcp
+            ports:
+              - "{{ security.ssh_port | default(4160) }}"
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports:
+              - "443"
+            cidr_ip: 0.0.0.0/0
+          - proto: udp
+            ports:
+              - "443"
+            cidr_ip: 0.0.0.0/0
+          - proto: tcp
+            ports:
+              - "8388"
+            cidr_ip: 0.0.0.0/0
+          - proto: udp
+            ports:
+              - "8388"
+            cidr_ip: 0.0.0.0/0
+        state: present
+      register: security_group
+    
+    - name: Launch EC2 instance
+      ec2:
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key.user_input }}"
+        aws_secret_key: "{{ aws_secret_key.user_input }}"
+        image: "{{ cloud_providers.ec2.image.name }}"
+        instance_type: "{{ cloud_providers.ec2.size }}"
+        key_name: "{{ key_pair_name }}"
+        security_groups:
+          - "{{ security_group.group_id }}"
+        instance_tags:
+          Name: "Advanced VPN Server"
+          Project: "Advanced VPN"
+          Created: "{{ ansible_date_time.iso8601 }}"
+        wait: true
+        wait_timeout: 600
+        assign_public_ip: true
+        volumes:
+          - device_name: /dev/sda1
+            volume_type: gp3
+            volume_size: 20
+            encrypted: "{{ cloud_providers.ec2.encrypted | default(true) }}"
+      register: ec2_instance
+    
+    - name: Wait for instance to be running
+      ec2_instance_info:
+        region: "{{ aws_region }}"
+        aws_access_key: "{{ aws_access_key.user_input }}"
+        aws_secret_key: "{{ aws_secret_key.user_input }}"
+        instance_ids:
+          - "{{ ec2_instance.instances[0].id }}"
+      register: instance_info
+      until: instance_info.instances[0].state.name == "running"
+      retries: 30
+      delay: 10
+    
+    - name: Add instance to inventory
+      add_host:
+        name: "vpn_server"
+        groups: "vpn_servers"
+        ansible_host: "{{ instance_info.instances[0].public_ip_address }}"
+        ansible_user: "ubuntu"
+        ansible_ssh_private_key_file: "{{ '~/.ssh/' + key_pair_name + '.pem' if key_pair_input.user_input == '' else '~/.ssh/' + key_pair_name + '.pem' }}"
+        instance_id: "{{ ec2_instance.instances[0].id }}"
+        region: "{{ aws_region }}"
+    
+    - name: Wait for SSH to be available
+      wait_for:
+        host: "{{ instance_info.instances[0].public_ip_address }}"
+        port: 22
+        delay: 30
+        timeout: 300

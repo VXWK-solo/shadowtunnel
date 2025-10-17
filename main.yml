@@ -1,0 +1,30 @@
+---
+- name: Advanced VPN Server Setup
+  hosts: localhost
+  become: false
+  tasks:
+    - name: Check Python version
+      assert:
+        that: (ansible_python.version.major|string + '.' + ansible_python.version.minor|string) is version('3.8', '>=')
+        msg: >
+          Python version is not supported.
+          You must upgrade to at least Python 3.8 to use this version of Advanced VPN.
+
+    - name: Check Ansible version
+      assert:
+        that: ansible_version.full is version('2.9', '>=')
+        msg: >
+          Ansible version is not supported.
+          You must upgrade to at least Ansible 2.9 to use this version of Advanced VPN.
+
+- name: Include prompts playbook
+  import_playbook: playbooks/prompts.yml
+
+- name: Include cloud provisioning playbook
+  import_playbook: playbooks/cloud.yml
+
+- name: Include server configuration playbook
+  import_playbook: playbooks/server.yml
+
+- name: Include client configuration playbook
+  import_playbook: playbooks/client.yml

@@ -1,0 +1,111 @@
+---
+# Default variables for Xray role
+xray_version: "1.8.7"
+xray_arch: "{{ ansible_architecture }}"
+xray_install_dir: "/usr/local/bin"
+xray_config_dir: "/etc/xray"
+xray_log_dir: "/var/log/xray"
+xray_user: "xray"
+xray_group: "xray"
+
+# Xray configuration
+xray_config:
+  log:
+    loglevel: "warning"
+    access: "{{ xray_log_dir }}/access.log"
+    error: "{{ xray_log_dir }}/error.log"
+  
+  api:
+    tag: "api"
+    services:
+      - "StatsService"
+      - "HandlerService"
+  
+  stats: {}
+  
+  policy:
+    levels:
+      "0":
+        handshake: 4
+        connIdle: 300
+        uplinkOnly: 5
+        downlinkOnly: 30
+        bufferSize: 4
+      "1":
+        handshake: 4
+        connIdle: 300
+        uplinkOnly: 5
+        downlinkOnly: 30
+        bufferSize: 16
+      "2":
+        handshake: 4
+        connIdle: 300
+        uplinkOnly: 5
+        downlinkOnly: 30
+        bufferSize: 64
+  
+  inbounds: []
+  outbounds:
+    - protocol: "freedom"
+      tag: "direct"
+    - protocol: "blackhole"
+      tag: "blocked"
+  
+  routing:
+    domainStrategy: "IPIfNonMatch"
+    rules:
+      - type: "field"
+        ip:
+          - "geoip:private"
+        outboundTag: "blocked"
+      - type: "field"
+        protocol:
+          - "bittorrent"
+        outboundTag: "blocked"
+
+# Protocol specific settings
+protocols:
+  vless:
+    enabled: true
+    port: 443
+    uuid: ""  # Will be generated
+    flow: "xtls-rprx-vision"
+    encryption: "none"
+  
+  vmess:
+    enabled: true
+    port: 443
+    uuid: ""  # Will be generated
+    alterId: 0
+    security: "auto"
+  
+  trojan:
+    enabled: true
+    port: 443
+    password: ""  # Will be generated
+  
+  shadowsocks:
+    enabled: true
+    port: 8388
+    method: "chacha20-ietf-poly1305"
+    password: ""  # Will be generated
+  
+  reality:
+    enabled: true
+    port: 443
+    uuid: ""  # Will be generated
+    flow: "xtls-rprx-vision"
+    dest: "www.microsoft.com:443"
+    shortId: "0123456789abcdef"
+    serverNames:
+      - "www.microsoft.com"
+    privateKey: ""  # Will be generated
+    publicKey: ""  # Will be generated
+
+# TLS settings
+tls:
+  enabled: true
+  certFile: "/etc/xray/cert.pem"
+  keyFile: "/etc/xray/key.pem"
+  minVersion: "1.2"
+  cipherSuites: "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256"

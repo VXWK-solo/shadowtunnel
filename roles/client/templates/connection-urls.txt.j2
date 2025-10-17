@@ -1,0 +1,43 @@
+VLESS Connection URLs for {{ users | join(', ') }}
+
+Server: {{ ansible_ssh_host | default(inventory_hostname) }}
+
+VLESS URLs:
+{% for user in users %}
+{{ user }}:
+vless://{{ vless_uuid }}@{{ ansible_ssh_host | default(inventory_hostname) }}:443?encryption=none&flow=xtls-rprx-vision&security=reality&sni={{ protocols.reality.dest.split(':')[0] }}&pbk={{ reality_public_key }}&sid={{ protocols.reality.shortId }}&type=tcp&headerType=none#{{ user }}
+
+{% endfor %}
+
+VMess URLs:
+{% for user in users %}
+{{ user }}:
+vmess://{{ vmess_uuid | b64encode }}@{{ ansible_ssh_host | default(inventory_hostname) }}:443?encryption=none&security=tls&type=tcp&headerType=none#{{ user }}
+
+{% endfor %}
+
+Trojan URLs:
+{% for user in users %}
+{{ user }}:
+trojan://{{ trojan_password }}@{{ ansible_ssh_host | default(inventory_hostname) }}:443?security=tls&type=tcp&headerType=none#{{ user }}
+
+{% endfor %}
+
+Shadowsocks URLs:
+{% for user in users %}
+{{ user }}:
+ss://{{ protocols.shadowsocks.method }}:{{ shadowsocks_password }}@{{ ansible_ssh_host | default(inventory_hostname) }}:{{ protocols.shadowsocks.port }}#{{ user }}
+
+{% endfor %}
+
+Instructions:
+1. Copy the URL for your preferred protocol
+2. Import it into your VPN client application
+3. Connect and enjoy secure browsing!
+
+Recommended clients:
+- Windows: v2rayN, Qv2ray
+- macOS: V2rayU, Qv2ray
+- Android: V2rayNG, SagerNet
+- iOS: Shadowrocket, OneClick
+- Linux: Qv2ray, V2rayA

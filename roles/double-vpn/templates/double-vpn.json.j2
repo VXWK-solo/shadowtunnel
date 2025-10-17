@@ -1,0 +1,63 @@
+{
+  "log": {
+    "loglevel": "warning"
+  },
+  "inbounds": [
+    {
+      "port": 443,
+      "protocol": "vless",
+      "settings": {
+        "clients": [
+          {% for user in users %}
+          {
+            "id": "{{ user_uuid[user] }}",
+            "flow": "xtls-rprx-vision"
+          }{% if not loop.last %},{% endif %}
+          {% endfor %}
+        ],
+        "decryption": "none"
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vless"
+        },
+        "security": "tls",
+        "tlsSettings": {
+          "certificates": [
+            {
+              "certificateFile": "/etc/ssl/certs/vpn.crt",
+              "keyFile": "/etc/ssl/private/vpn.key"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "vless",
+      "settings": {
+        "vnext": [
+          {
+            "address": "{{ vpn_chains.double_vpn.servers[1].host }}",
+            "port": {{ vpn_chains.double_vpn.servers[1].port }},
+            "users": [
+              {
+                "id": "{{ vpn_chains.double_vpn.servers[1].uuid }}",
+                "flow": "xtls-rprx-vision"
+              }
+            ]
+          }
+        ]
+      },
+      "streamSettings": {
+        "network": "ws",
+        "wsSettings": {
+          "path": "/vless"
+        },
+        "security": "tls"
+      }
+    }
+  ]
+}

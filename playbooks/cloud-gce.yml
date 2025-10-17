@@ -1,0 +1,134 @@
+---
+- name: Provision Google Cloud Platform Instance
+  hosts: localhost
+  become: false
+  gather_facts: false
+  
+  tasks:
+    - name: Prompt for GCP project ID
+      pause:
+        prompt: |
+          Enter your GCP Project ID:
+      register: gcp_project
+    
+    - name: Prompt for GCP region
+      pause:
+        prompt: |
+          Select GCP region:
+          1) us-central1 (Iowa)
+          2) us-east1 (South Carolina)
+          3) us-west1 (Oregon)
+          4) europe-west1 (Belgium)
+          5) europe-west3 (Frankfurt)
+          6) asia-southeast1 (Singapore)
+          7) asia-northeast1 (Tokyo)
+          
+          Enter choice (1-7):
+      register: region_choice
+    
+    - name: Set GCP region
+      set_fact:
+        gcp_region: "{{ ['us-central1', 'us-east1', 'us-west1', 'europe-west1', 'europe-west3', 'asia-southeast1', 'asia-northeast1'][region_choice.user_input | int - 1] }}"
+    
+    - name: Prompt for service account key file
+      pause:
+        prompt: |
+          Enter path to GCP service account key file:
+          (JSON file downloaded from GCP Console)
+      register: service_account_key
+    
+    - name: Create firewall rule
+      gcp_compute_firewall:
+        name: "advanced-vpn-firewall"
+        project: "{{ gcp_project.user_input }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ service_account_key.user_input }}"
+        allowed:
+          - ip_protocol: tcp
+            ports:
+              - "{{ security.ssh_port | default(4160) }}"
+          - ip_protocol: tcp
+            ports:
+              - "443"
+          - ip_protocol: udp
+            ports:
+              - "443"
+          - ip_protocol: tcp
+            ports:
+              - "8388"
+          - ip_protocol: udp
+            ports:
+              - "8388"
+        source_ranges:
+          - "0.0.0.0/0"
+        state: present
+      register: firewall_rule
+    
+    - name: Create GCP instance
+      gcp_compute_instance:
+        name: "advanced-vpn-{{ ansible_date_time.epoch }}"
+        project: "{{ gcp_project.user_input }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ service_account_key.user_input }}"
+        zone: "{{ gcp_region }}-a"
+        machine_type: "{{ cloud_providers.gce.size }}"
+        disks:
+          - source: "{{ gcp_image }}"
+            boot: true
+            auto_delete: true
+            initialize_params:
+              disk_size_gb: 20
+              disk_type: "pd-standard"
+        network_interfaces:
+          - network: "default"
+            access_configs:
+              - name: "External NAT"
+                type: "ONE_TO_ONE_NAT"
+        metadata:
+          ssh-keys: "ubuntu:{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+        tags:
+          - "advanced-vpn"
+          - "vpn-server"
+        state: present
+      register: gcp_instance
+    
+    - name: Wait for instance to be running
+      gcp_compute_instance_info:
+        project: "{{ gcp_project.user_input }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ service_account_key.user_input }}"
+        zone: "{{ gcp_region }}-a"
+        filters:
+          - name = "advanced-vpn-{{ ansible_date_time.epoch }}"
+      register: instance_info
+      until: instance_info.resources[0].status == "RUNNING"
+      retries: 30
+      delay: 10
+    
+    - name: Get external IP
+      gcp_compute_instance_info:
+        project: "{{ gcp_project.user_input }}"
+        auth_kind: serviceaccount
+        service_account_file: "{{ service_account_key.user_input }}"
+        zone: "{{ gcp_region }}-a"
+        filters:
+          - name = "advanced-vpn-{{ ansible_date_time.epoch }}"
+      register: instance_details
+    
+    - name: Add instance to inventory
+      add_host:
+        name: "vpn_server"
+        groups: "vpn_servers"
+        ansible_host: "{{ instance_details.resources[0].networkInterfaces[0].accessConfigs[0].natIP }}"
+        ansible_user: "ubuntu"
+        ansible_ssh_private_key_file: "~/.ssh/id_rsa"
+        instance_name: "{{ instance_details.resources[0].name }}"
+        zone: "{{ gcp_region }}-a"
+        project: "{{ gcp_project.user_input }}"
+    
+    - name: Wait for SSH to be available
+      wait_for:
+        host: "{{ instance_details.resources[0].networkInterfaces[0].accessConfigs[0].natIP }}"
+        port: 22
+        delay: 30
+        timeout: 300

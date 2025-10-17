@@ -1,0 +1,115 @@
+---
+- name: Configure Advanced VPN Server
+  hosts: "{{ target_hosts | default('vpn_servers') }}"
+  become: true
+  gather_facts: true
+  
+  pre_tasks:
+    - name: Update package cache
+      apt:
+        update_cache: true
+        cache_valid_time: 3600
+      when: ansible_os_family == "Debian"
+
+    - name: Install basic packages
+      package:
+        name:
+          - curl
+          - wget
+          - unzip
+          - jq
+          - openssl
+          - ufw
+          - fail2ban
+          - htop
+          - nano
+        state: present
+
+  roles:
+    - role: common
+      tags: [common, always]
+    
+    - role: privacy
+      when: privacy.enhancements_enabled | default(true)
+      tags: [privacy]
+    
+    - role: dns
+      when: dns.encryption_enabled | default(true)
+      tags: [dns]
+    
+    - role: tls
+      when: tls.enabled | default(true)
+      tags: [tls, certificates]
+    
+    - role: xray
+      when: vpn_protocols.xray_enabled | default(true)
+      tags: [xray, vpn]
+    
+    - role: v2ray
+      when: vpn_protocols.v2ray_enabled | default(false)
+      tags: [v2ray, vpn]
+    
+    - role: shadowsocks
+      when: vpn_protocols.shadowsocks_enabled | default(false)
+      tags: [shadowsocks, vpn]
+    
+    - role: webpanel
+      when: web_panel.enabled | default(false)
+      tags: [webpanel, management]
+    
+    - role: monitoring
+      when: monitoring.enabled | default(false)
+      tags: [monitoring, metrics]
+    
+    - role: backup
+      when: backup.enabled | default(false)
+      tags: [backup, storage]
+    
+    - role: autoupdate
+      when: autoupdate.enabled | default(false)
+      tags: [autoupdate, updates]
+    
+    - role: docker
+      when: docker.enabled | default(false)
+      tags: [docker, containers]
+
+  post_tasks:
+    - name: Configure firewall
+      ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto | default('tcp') }}"
+      loop:
+        - { rule: 'allow', port: '{{ security.ssh_port | default(4160) }}', proto: 'tcp' }
+        - { rule: 'allow', port: '443', proto: 'tcp' }
+        - { rule: 'allow', port: '443', proto: 'udp' }
+        - { rule: 'allow', port: '8388', proto: 'tcp' }
+        - { rule: 'allow', port: '8388', proto: 'udp' }
+      when: "'{{ item.port }}' in [vpn_protocols.xray_enabled, vpn_protocols.v2ray_enabled, vpn_protocols.shadowsocks_enabled]"
+
+    - name: Enable firewall
+      ufw:
+        state: enabled
+        policy: deny
+
+    - name: Configure fail2ban
+      copy:
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 3
+          
+          [sshd]
+          enabled = true
+          port = {{ security.ssh_port | default(4160) }}
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+        dest: /etc/fail2ban/jail.local
+      notify: restart fail2ban
+
+    - name: Display success message
+      debug:
+        msg: "{{ messages.success }}"
+      when: messages.success is defined

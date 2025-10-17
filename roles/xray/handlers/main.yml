@@ -1,0 +1,12 @@
+---
+- name: restart xray
+  systemd:
+    name: xray
+    state: restarted
+    daemon_reload: true
+
+- name: reload xray
+  systemd:
+    name: xray
+    state: reloaded
+    daemon_reload: true

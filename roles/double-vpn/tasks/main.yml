@@ -1,0 +1,31 @@
+---
+- name: Generate double VPN configuration
+  template:
+    src: double-vpn.json.j2
+    dest: /etc/xray/double-vpn.json
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart xray
+
+- name: Create double VPN client configurations
+  template:
+    src: double-vpn-client.json.j2
+    dest: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  loop:
+    - path: "/etc/xray/clients/{{ item }}-double-vpn.json"
+  loop_control:
+    loop_var: item
+  with_items: "{{ users }}"
+  notify: restart xray
+
+- name: Generate double VPN connection URLs
+  template:
+    src: double-vpn-urls.txt.j2
+    dest: /opt/vpn/double-vpn-urls.txt
+    owner: root
+    group: root
+    mode: '0644'

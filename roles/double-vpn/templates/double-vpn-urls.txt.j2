@@ -1,0 +1,11 @@
+# Double VPN Connection URLs
+# Generated on {{ ansible_date_time.iso8601 }}
+
+{% for user in users %}
+# User: {{ user }}
+vless://{{ user_uuid[user] }}@{{ vpn_chains.double_vpn.servers[0].host }}:{{ vpn_chains.double_vpn.servers[0].port }}?encryption=none&security=tls&type=ws&host={{ vpn_chains.double_vpn.servers[0].host }}&path=%2Fvless&sni={{ vpn_chains.double_vpn.servers[0].host }}&flow=xtls-rprx-vision#Double-VPN-{{ user }}
+
+{% endfor %}
+
+# Configuration files location:
+# /etc/xray/clients/{{ user }}-double-vpn.json

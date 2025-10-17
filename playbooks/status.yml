@@ -1,0 +1,68 @@
+---
+- name: System Status Check
+  hosts: "{{ target_hosts | default('vpn_servers') }}"
+  become: true
+  gather_facts: true
+  
+  tasks:
+    - name: Check VPN services status
+      systemd:
+        name: "{{ item }}"
+      register: service_status
+      loop:
+        - xray
+        - v2ray
+        - nginx
+        - prometheus
+        - grafana-server
+      tags: [status, services]
+    
+    - name: Check system resources
+      shell: |
+        echo "CPU Usage: $(top -bn1 | grep "Cpu(s)" | awk '{print $2}' | cut -d'%' -f1)"
+        echo "Memory Usage: $(free | grep Mem | awk '{printf "%.1f%%", $3/$2 * 100.0}')"
+        echo "Disk Usage: $(df -h / | awk 'NR==2{printf "%s", $5}')"
+        echo "Load Average: $(uptime | awk -F'load average:' '{print $2}')"
+      register: system_resources
+      tags: [status, resources]
+    
+    - name: Check network connectivity
+      shell: |
+        echo "Internet Connectivity: $(ping -c 1 8.8.8.8 > /dev/null 2>&1 && echo "OK" || echo "FAILED")"
+        echo "DNS Resolution: $(nslookup google.com > /dev/null 2>&1 && echo "OK" || echo "FAILED")"
+      register: network_status
+      tags: [status, network]
+    
+    - name: Check VPN connections
+      shell: |
+        if systemctl is-active --quiet xray; then
+          echo "Xray: $(systemctl is-active xray)"
+          echo "Xray Connections: $(ss -tulpn | grep :443 | wc -l)"
+        fi
+        if systemctl is-active --quiet v2ray; then
+          echo "V2Ray: $(systemctl is-active v2ray)"
+          echo "V2Ray Connections: $(ss -tulpn | grep :10086 | wc -l)"
+        fi
+      register: vpn_status
+      tags: [status, vpn]
+    
+    - name: Check certificate status
+      shell: |
+        if [ -f /etc/letsencrypt/live/{{ tls.domain | default('example.com') }}/cert.pem ]; then
+          echo "Certificate Expiry: $(openssl x509 -in /etc/letsencrypt/live/{{ tls.domain | default('example.com') }}/cert.pem -noout -dates | grep notAfter | cut -d= -f2)"
+        else
+          echo "No certificate found"
+        fi
+      register: cert_status
+      tags: [status, certificates]
+    
+    - name: Display status summary
+      debug:
+        msg: |
+          === VPN Server Status ===
+          Services: {{ service_status.results | map(attribute='status') | list }}
+          Resources: {{ system_resources.stdout_lines }}
+          Network: {{ network_status.stdout_lines }}
+          VPN: {{ vpn_status.stdout_lines }}
+          Certificates: {{ cert_status.stdout_lines }}
+      tags: [status, summary]

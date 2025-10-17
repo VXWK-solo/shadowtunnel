@@ -1,0 +1,260 @@
+# Alert Rules for Advanced VPN Server
+
+groups:
+  # System Alerts
+  - name: system
+    rules:
+      - alert: HighCPUUsage
+        expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU usage detected"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+
+      - alert: HighMemoryUsage
+        expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High memory usage detected"
+          description: "Memory usage is above 85% for more than 5 minutes on {{ $labels.instance }}"
+
+      - alert: DiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Low disk space"
+          description: "Disk space is below 10% on {{ $labels.instance }}"
+
+      - alert: SystemLoadHigh
+        expr: node_load1 > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High system load"
+          description: "System load is above 5 for more than 5 minutes on {{ $labels.instance }}"
+
+  # VPN Service Alerts
+  - name: vpn-services
+    rules:
+      - alert: VPNServiceDown
+        expr: up{job="vpn-server"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "VPN service is down"
+          description: "VPN service has been down for more than 1 minute on {{ $labels.instance }}"
+
+      - alert: HighVPNConnections
+        expr: vpn_active_connections > 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High number of VPN connections"
+          description: "Number of active VPN connections is above 1000 on {{ $labels.instance }}"
+
+      - alert: VPNConnectionErrors
+        expr: rate(vpn_connection_errors_total[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High VPN connection error rate"
+          description: "VPN connection error rate is above 10 errors per second on {{ $labels.instance }}"
+
+      - alert: VPNTrafficAnomaly
+        expr: rate(vpn_bytes_received_total[5m]) > 1000000000  # 1GB/s
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual VPN traffic pattern"
+          description: "VPN traffic is unusually high on {{ $labels.instance }}"
+
+  # Security Alerts
+  - name: security
+    rules:
+      - alert: BruteForceAttack
+        expr: rate(failed_login_attempts_total[5m]) > 5
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential brute force attack"
+          description: "High rate of failed login attempts detected on {{ $labels.instance }}"
+
+      - alert: DDoSAttack
+        expr: rate(http_requests_total{status=~"5.."}[5m]) > 100
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Potential DDoS attack"
+          description: "High rate of 5xx errors detected on {{ $labels.instance }}"
+
+      - alert: UnauthorizedAccess
+        expr: increase(unauthorized_access_attempts_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Unauthorized access attempt"
+          description: "Unauthorized access attempt detected on {{ $labels.instance }}"
+
+      - alert: CertificateExpiring
+        expr: ssl_certificate_expiry_seconds < 86400 * 30  # 30 days
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "SSL certificate expiring soon"
+          description: "SSL certificate expires in less than 30 days on {{ $labels.instance }}"
+
+  # Database Alerts
+  - name: database
+    rules:
+      - alert: PostgreSQLDown
+        expr: up{job="postgres"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute on {{ $labels.instance }}"
+
+      - alert: PostgreSQLHighConnections
+        expr: pg_stat_database_numbackends > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High PostgreSQL connections"
+          description: "PostgreSQL has more than 80 active connections on {{ $labels.instance }}"
+
+      - alert: PostgreSQLSlowQueries
+        expr: rate(pg_stat_database_tup_returned[5m]) < 1000
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Slow PostgreSQL queries"
+          description: "PostgreSQL query performance is degraded on {{ $labels.instance }}"
+
+  # Web Panel Alerts
+  - name: webpanel
+    rules:
+      - alert: WebPanelDown
+        expr: up{job="webpanel"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Web panel is down"
+          description: "Web management panel has been down for more than 1 minute on {{ $labels.instance }}"
+
+      - alert: WebPanelHighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High web panel response time"
+          description: "95th percentile response time is above 2 seconds on {{ $labels.instance }}"
+
+      - alert: WebPanelHighErrorRate
+        expr: rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High web panel error rate"
+          description: "Error rate is above 5% on {{ $labels.instance }}"
+
+  # Network Alerts
+  - name: network
+    rules:
+      - alert: NetworkInterfaceDown
+        expr: up{job="node-exporter"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network interface is down"
+          description: "Network interface has been down for more than 1 minute on {{ $labels.instance }}"
+
+      - alert: HighNetworkTraffic
+        expr: rate(node_network_receive_bytes_total[5m]) > 1000000000  # 1GB/s
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High network traffic"
+          description: "Network traffic is unusually high on {{ $labels.instance }}"
+
+      - alert: NetworkPacketLoss
+        expr: rate(node_network_receive_drop_total[5m]) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Network packet loss detected"
+          description: "Network packet loss is above 1% on {{ $labels.instance }}"
+
+  # Backup Alerts
+  - name: backup
+    rules:
+      - alert: BackupFailed
+        expr: backup_last_success_timestamp < (time() - 86400)  # 24 hours
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Backup failed"
+          description: "Backup has not completed successfully in the last 24 hours on {{ $labels.instance }}"
+
+      - alert: BackupSizeAnomaly
+        expr: backup_size_bytes > 10000000000  # 10GB
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Unusual backup size"
+          description: "Backup size is unusually large on {{ $labels.instance }}"
+
+  # Application Alerts
+  - name: application
+    rules:
+      - alert: ApplicationCrash
+        expr: increase(application_crashes_total[5m]) > 0
+        for: 0m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Application crash detected"
+          description: "Application has crashed on {{ $labels.instance }}"
+
+      - alert: ApplicationMemoryLeak
+        expr: increase(application_memory_usage_bytes[1h]) > 1000000000  # 1GB
+        for: 0m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Potential memory leak"
+          description: "Application memory usage has increased by more than 1GB in the last hour on {{ $labels.instance }}"
+
+      - alert: ApplicationHighLatency
+        expr: histogram_quantile(0.95, rate(application_request_duration_seconds_bucket[5m])) > 5
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High application latency"
+          description: "95th percentile latency is above 5 seconds on {{ $labels.instance }}"

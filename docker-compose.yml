@@ -1,0 +1,272 @@
+version: '3.8'
+
+services:
+  # Main VPN Server
+  vpn-server:
+    build:
+      context: .
+      target: production
+    container_name: advanced-vpn-server
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "8388:8388"
+      - "80:80"
+    volumes:
+      - vpn-configs:/etc/vpn
+      - vpn-certs:/etc/ssl/certs
+      - vpn-logs:/var/log/vpn
+      - vpn-data:/opt/vpn
+    environment:
+      - TZ=UTC
+      - VPN_LOG_LEVEL=warning
+      - VPN_ENVIRONMENT=production
+    networks:
+      - vpn-network
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/healthcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    depends_on:
+      - redis
+      - postgres
+
+  # Web Management Panel
+  webpanel:
+    build:
+      context: .
+      target: production
+    container_name: advanced-vpn-webpanel
+    restart: unless-stopped
+    ports:
+      - "2053:2053"
+    volumes:
+      - vpn-configs:/app/config
+      - vpn-logs:/app/logs
+    environment:
+      - NODE_ENV=production
+      - PORT=2053
+      - JWT_SECRET=${JWT_SECRET}
+      - DATABASE_URL=postgresql://vpn:${POSTGRES_PASSWORD}@postgres:5432/vpn
+      - REDIS_URL=redis://redis:6379
+    networks:
+      - vpn-network
+    depends_on:
+      - postgres
+      - redis
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:2053/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Prometheus Metrics
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: advanced-vpn-prometheus
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - prometheus-data:/prometheus
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./monitoring/alerts.yml:/etc/prometheus/alerts.yml
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=30d'
+      - '--web.enable-lifecycle'
+      - '--web.enable-admin-api'
+    networks:
+      - vpn-network
+
+  # Grafana Dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: advanced-vpn-grafana
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD}
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    networks:
+      - vpn-network
+    depends_on:
+      - prometheus
+
+  # Alertmanager
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: advanced-vpn-alertmanager
+    restart: unless-stopped
+    ports:
+      - "9093:9093"
+    volumes:
+      - alertmanager-data:/alertmanager
+      - ./monitoring/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+      - '--web.external-url=http://localhost:9093'
+    networks:
+      - vpn-network
+
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: advanced-vpn-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=vpn
+      - POSTGRES_USER=vpn
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - vpn-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vpn"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis Cache
+  redis:
+    image: redis:7-alpine
+    container_name: advanced-vpn-redis
+    restart: unless-stopped
+    volumes:
+      - redis-data:/data
+    networks:
+      - vpn-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Nginx Reverse Proxy
+  nginx:
+    image: nginx:alpine
+    container_name: advanced-vpn-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - nginx-config:/etc/nginx/conf.d
+      - vpn-certs:/etc/ssl/certs
+      - nginx-logs:/var/log/nginx
+    networks:
+      - vpn-network
+    depends_on:
+      - webpanel
+      - grafana
+      - prometheus
+
+  # Log Aggregation
+  filebeat:
+    image: elastic/filebeat:8.8.0
+    container_name: advanced-vpn-filebeat
+    restart: unless-stopped
+    volumes:
+      - ./monitoring/filebeat.yml:/usr/share/filebeat/filebeat.yml:ro
+      - vpn-logs:/var/log/vpn:ro
+      - /var/log:/var/log:ro
+    networks:
+      - vpn-network
+    depends_on:
+      - elasticsearch
+
+  # Elasticsearch
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.8.0
+    container_name: advanced-vpn-elasticsearch
+    restart: unless-stopped
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    networks:
+      - vpn-network
+
+  # Kibana
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.8.0
+    container_name: advanced-vpn-kibana
+    restart: unless-stopped
+    ports:
+      - "5601:5601"
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    networks:
+      - vpn-network
+    depends_on:
+      - elasticsearch
+
+  # Backup Service
+  backup:
+    image: postgres:15-alpine
+    container_name: advanced-vpn-backup
+    restart: "no"
+    volumes:
+      - backup-data:/backups
+      - ./scripts/backup.sh:/backup.sh:ro
+    environment:
+      - POSTGRES_DB=vpn
+      - POSTGRES_USER=vpn
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - POSTGRES_HOST=postgres
+    networks:
+      - vpn-network
+    depends_on:
+      - postgres
+    command: ["/bin/sh", "/backup.sh"]
+
+volumes:
+  vpn-configs:
+    driver: local
+  vpn-certs:
+    driver: local
+  vpn-logs:
+    driver: local
+  vpn-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  grafana-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  nginx-config:
+    driver: local
+  nginx-logs:
+    driver: local
+  elasticsearch-data:
+    driver: local
+  backup-data:
+    driver: local
+
+networks:
+  vpn-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
