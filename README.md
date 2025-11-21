@@ -667,7 +667,7 @@ k6 run tests/performance/stress-test.js
 - **Geographic distribution**: Deploy servers worldwide
 - **CDN integration**: Accelerate content delivery
 
-## 🤝 Contributing
+## Contributing
 
 We welcome contributions! Please see our [Contributing Guide](CONTRIBUTING.md) for details.
 
@@ -695,11 +695,11 @@ docker-compose -f docker-compose.dev.yml up -d
 - **YAML**: Follow Ansible best practices
 - **Documentation**: Use Sphinx for API docs
 
-## 📄 License
+## License
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
-## 🆘 Support
+## Support
 
 ### Community Support
 
@@ -722,7 +722,7 @@ This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE)
 - **Deployment Guide**: [docs/deployment.md](docs/deployment.md)
 - **Security Guide**: [docs/security.md](docs/security.md)
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - [trailofbits/algo](https://github.com/trailofbits/algo) - Inspiration and foundation
 - [XTLS/Xray-core](https://github.com/XTLS/Xray-core) - Modern VPN protocols
