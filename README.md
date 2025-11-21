@@ -699,37 +699,4 @@ docker-compose -f docker-compose.dev.yml up -d
 
 This project is licensed under the AGPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
-## Support
-
-### Community Support
-
-- **GitHub Issues**: Bug reports and feature requests
-- **GitHub Discussions**: Community discussions and Q&A
-- **Discord**: Real-time community chat
-- **Stack Overflow**: Technical questions with `advanced-vpn` tag
-
-### Professional Support
-
-- **Enterprise Support**: 24/7 support with SLA
-- **Consulting Services**: Custom deployments and migrations
-- **Training**: On-site and online training programs
-- **Custom Development**: Tailored solutions for your needs
-
-### Documentation
-
-- **User Guide**: [docs/user-guide.md](docs/user-guide.md)
-- **API Reference**: [docs/api-reference.md](docs/api-reference.md)
-- **Deployment Guide**: [docs/deployment.md](docs/deployment.md)
-- **Security Guide**: [docs/security.md](docs/security.md)
-
-## Acknowledgments
-
-- [trailofbits/algo](https://github.com/trailofbits/algo) - Inspiration and foundation
-- [XTLS/Xray-core](https://github.com/XTLS/Xray-core) - Modern VPN protocols
-- [v2fly/v2ray-core](https://github.com/v2fly/v2ray-core) - Classic protocols
-- [Prometheus](https://prometheus.io/) - Monitoring and alerting
-- [Grafana](https://grafana.com/) - Visualization and dashboards
-
 ---
-
-**Advanced VPN Server** - Enterprise-grade VPN platform for the modern internet! 🌐🔒
