@@ -304,38 +304,38 @@ Default credentials:
 ┌─────────────────────────────────────────────────────────────┐
 │                    Advanced VPN Platform                    │
 ├─────────────────────────────────────────────────────────────┤
-│  🌐 Web Management Panel (React + Node.js)                 │
-│  ├── User Management API                                   │
-│  ├── Real-time Monitoring Dashboard                        │
-│  ├── Configuration Management                              │
-│  └── Audit & Compliance Reporting                         │
+│  🌐 Web Management Panel (React + Node.js)                  │
+│  ├── User Management API                                    │
+│  ├── Real-time Monitoring Dashboard                         │
+│  ├── Configuration Management                               │
+│  └── Audit & Compliance Reporting                           │
 ├─────────────────────────────────────────────────────────────┤
-│  Observability Stack                                      │
-│  ├── Prometheus (Metrics Collection)                       │
-│  ├── Grafana (Visualization)                              │
-│  ├── Alertmanager (Alerting)                               │
-│  ├── ELK Stack (Logging)                                   │
-│  └── Jaeger (Distributed Tracing)                         │
+│  Observability Stack                                        │
+│  ├── Prometheus (Metrics Collection)                        │
+│  ├── Grafana (Visualization)                                │
+│  ├── Alertmanager (Alerting)                                │
+│  ├── ELK Stack (Logging)                                    │
+│  └── Jaeger (Distributed Tracing)                           │
 ├─────────────────────────────────────────────────────────────┤
-│  🔐 VPN Protocol Stack                                     │
-│  ├── Xray-core (VLESS, VMess, Trojan, Shadowsocks)        │
-│  ├── V2Ray (Legacy Protocol Support)                       │
-│  ├── Shadowsocks (Standalone)                             │
-│  └── Custom Protocol Extensions                            │
+│  🔐 VPN Protocol Stack                                      │
+│  ├── Xray-core (VLESS, VMess, Trojan, Shadowsocks)          │
+│  ├── V2Ray (Legacy Protocol Support)                        │
+│  ├── Shadowsocks (Standalone)                               │
+│  └── Custom Protocol Extensions                             │
 ├─────────────────────────────────────────────────────────────┤
-│  Security & Compliance Layer                             │
-│  ├── TLS/SSL Certificate Management                        │
-│  ├── Firewall & Network Security                           │
-│  ├── Intrusion Detection (IDS/IPS)                         │
-│  ├── Vulnerability Scanning                                │
-│  └── Compliance Monitoring                                 │
+│  Security & Compliance Layer                                │
+│  ├── TLS/SSL Certificate Management                         │
+│  ├── Firewall & Network Security                            │
+│  ├── Intrusion Detection (IDS/IPS)                          │
+│  ├── Vulnerability Scanning                                 │
+│  └── Compliance Monitoring                                  │
 ├─────────────────────────────────────────────────────────────┤
-│  💾 Infrastructure Layer                                   │
-│  ├── Automated Backup & Recovery                          │
-│  ├── High Availability & Clustering                       │
-│  ├── Load Balancing & Traffic Management                   │
-│  ├── Container Orchestration (Kubernetes)                 │
-│  └── Infrastructure as Code (Terraform)                   │
+│  💾 Infrastructure Layer                                    │
+│  ├── Automated Backup & Recovery                            │
+│  ├── High Availability & Clustering                         │
+│  ├── Load Balancing & Traffic Management                    │
+│  ├── Container Orchestration (Kubernetes)                   │
+│  └── Infrastructure as Code (Terraform)                     │
 └─────────────────────────────────────────────────────────────┘
 ```
 
