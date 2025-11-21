@@ -298,13 +298,13 @@ Default credentials:
 - End-to-end encryption
 - Audit logging and compliance reporting
 
-## 📋 Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Advanced VPN Platform                    │
 ├─────────────────────────────────────────────────────────────┤
-│  🌐 Web Management Panel (React + Node.js)                  │
+│  Web Management Panel (React + Node.js)                     │
 │  ├── User Management API                                    │
 │  ├── Real-time Monitoring Dashboard                         │
 │  ├── Configuration Management                               │
@@ -317,7 +317,7 @@ Default credentials:
 │  ├── ELK Stack (Logging)                                    │
 │  └── Jaeger (Distributed Tracing)                           │
 ├─────────────────────────────────────────────────────────────┤
-│  🔐 VPN Protocol Stack                                      │
+│  VPN Protocol Stack                                         │
 │  ├── Xray-core (VLESS, VMess, Trojan, Shadowsocks)          │
 │  ├── V2Ray (Legacy Protocol Support)                        │
 │  ├── Shadowsocks (Standalone)                               │
@@ -330,7 +330,7 @@ Default credentials:
 │  ├── Vulnerability Scanning                                 │
 │  └── Compliance Monitoring                                  │
 ├─────────────────────────────────────────────────────────────┤
-│  💾 Infrastructure Layer                                    │
+│  Infrastructure Layer                                       │
 │  ├── Automated Backup & Recovery                            │
 │  ├── High Availability & Clustering                         │
 │  ├── Load Balancing & Traffic Management                    │
@@ -527,7 +527,7 @@ Intelligent alerting system:
 - **Security alerts**: Brute force attacks, suspicious activity
 - **Business alerts**: Service degradation, SLA breaches
 
-## 🔒 Security & Compliance
+##  Security & Compliance
 
 ### Security Features
 
@@ -607,7 +607,7 @@ subscription UserConnections {
 }
 ```
 
-## 🧪 Testing
+## Testing
 
 ### Unit Tests
 
